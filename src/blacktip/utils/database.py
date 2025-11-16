@@ -22,6 +22,23 @@ class BlacktipDatabase:
             db_path: Path to SQLite database file
         """
         self.db_path = db_path
+        
+        # Check if database directory is writable
+        db_dir = os.path.dirname(self.db_path) or '.'
+        if os.path.exists(self.db_path):
+            # Check if database file is writable
+            if not os.access(self.db_path, os.W_OK):
+                raise PermissionError(
+                    "Database file is not writable: {}\n"
+                    "Try: chmod 666 {}".format(self.db_path, self.db_path)
+                )
+        elif not os.access(db_dir, os.W_OK):
+            # Database doesn't exist, check if directory is writable
+            raise PermissionError(
+                "Cannot create database in directory: {}\n"
+                "Try: chmod 777 {}".format(db_dir, db_dir)
+            )
+        
         self._init_database()
     
     @contextmanager

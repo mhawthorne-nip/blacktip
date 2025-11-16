@@ -30,7 +30,17 @@ if not os.path.exists(DB_PATH):
     print("Set BLACKTIP_DB environment variable or create database first")
     sys.exit(1)
 
-db = BlacktipDatabase(DB_PATH)
+# Check if database is writable
+if not os.access(DB_PATH, os.W_OK):
+    print("ERROR: Database file is not writable: {}".format(DB_PATH))
+    print("Fix permissions with: chmod 666 {}".format(DB_PATH))
+    sys.exit(1)
+
+try:
+    db = BlacktipDatabase(DB_PATH)
+except PermissionError as e:
+    print("ERROR: {}".format(str(e)))
+    sys.exit(1)
 
 # Simple HTML template
 HTML_TEMPLATE = """
