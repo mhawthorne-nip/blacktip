@@ -8,7 +8,6 @@ version = "1.0.0"
 description = "Passive network security scanner for real-time ARP traffic analysis, device fingerprinting, and threat detection on Linux systems"
 readme = "README.md"
 requires-python = ">=3.8.0"
-license = {text = "BSD-2-Clause"}
 authors = [
     {name = "Michael Hawthorne", email = "mph005@gmail.com"}
 ]
@@ -36,7 +35,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX :: Linux",
 ]
 

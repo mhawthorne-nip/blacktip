@@ -159,7 +159,6 @@ blacktip/
 ├── requirements-dev.txt    # Development dependencies
 ├── README.md              # Project documentation
 ├── CHANGELOG.md           # Version history
-├── LICENSE                # BSD-2-Clause license
 ├── src/
 │   └── blacktip/          # Source code
 │       ├── __init__.py    # Package initialization

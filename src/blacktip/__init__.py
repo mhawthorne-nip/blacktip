@@ -4,7 +4,6 @@
 __title__ = "blacktip"
 __author__ = "Michael Hawthorne <mph005@gmail.com>"
 __version__ = "1.0.0"
-__license__ = "BSD2"
 
 __logger_default_level__ = "info"
 
