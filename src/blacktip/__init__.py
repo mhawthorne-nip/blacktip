@@ -1,8 +1,8 @@
 # -*- coding: utf8 -*-
-# Copyright (c) 2020 Nicholas de Jong
+# Copyright (c) 2025 Michael Hawthorne
 
 __title__ = "blacktip"
-__author__ = "Nicholas de Jong <contact@nicholasdejong.com>"
+__author__ = "Michael Hawthorne <mph005@gmail.com>"
 __version__ = "1.0.0"
 __license__ = "BSD2"
 

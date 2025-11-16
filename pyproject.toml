@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "blacktip"
 version = "1.0.0"
-description = "A modern network monitoring tool for ARP monitoring and anomaly detection (Linux only)"
+description = "Passive network security scanner for real-time ARP traffic analysis, device fingerprinting, and threat detection on Linux systems"
 readme = "README.md"
 requires-python = ">=3.8.0"
 license = {text = "BSD-2-Clause"}
 authors = [
-    {name = "Nicholas de Jong", email = "contact@nicholasdejong.com"}
+    {name = "Michael Hawthorne", email = "mph005@gmail.com"}
 ]
 keywords = [
     "blacktip",
@@ -61,8 +61,8 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://blacktip.readthedocs.io/"
-Documentation = "https://blacktip.readthedocs.io/"
+Homepage = "https://github.com/mhawthorne-nip/blacktip"
+Documentation = "https://github.com/mhawthorne-nip/blacktip/blob/main/README.md"
 Repository = "https://github.com/mhawthorne-nip/blacktip"
 Changelog = "https://github.com/mhawthorne-nip/blacktip/blob/main/CHANGELOG.md"
 
