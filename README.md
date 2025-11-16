@@ -77,14 +77,6 @@ blacktip -f /var/lib/blacktip/network.db -q 192.168.1.100
 blacktip -f /var/lib/blacktip/network.db -q aa:bb:cc:dd:ee:ff
 ```
 
-### Export Data
-
-Export the database to JSON format:
-
-```bash
-blacktip -f /var/lib/blacktip/network.db --export-json backup.json
-```
-
 ## Usage Examples
 
 ### Monitor Specific Interface
@@ -155,7 +147,7 @@ sudo blacktip -f network.db --debug
 
 | Option | Description |
 |--------|-------------|
-| `-f, --datafile <file>` | SQLite database or JSON file for storing ARP data |
+| `-f, --datafile <file>` | SQLite database for storing ARP data |
 | `-i, --interval <seconds>` | Interval between database writes (default: 30) |
 | `--interface <name>` | Network interface to monitor (e.g., eth0, wlan0) |
 
@@ -184,7 +176,6 @@ sudo blacktip -f network.db --debug
 | Option | Description |
 |--------|-------------|
 | `-q, --query <address>` | Query database for IP or MAC address |
-| `--export-json <file>` | Export database to JSON format |
 | `-v, --version` | Display version information |
 | `-d, --debug` | Enable debug output |
 | `--metrics` | Enable metrics collection (default) |
@@ -207,18 +198,6 @@ sudo blacktip -f /var/lib/blacktip/network.db
 # - Nmap scan results (ports, services, OS detection)
 # - ARP event history
 # - Network statistics
-```
-
-### Legacy JSON Format
-
-For backward compatibility, JSON files are still supported:
-
-```bash
-# Use JSON file
-sudo blacktip -f network.json
-
-# Convert SQLite to JSON
-blacktip -f network.db --export-json network.json
 ```
 
 ## Output Format
