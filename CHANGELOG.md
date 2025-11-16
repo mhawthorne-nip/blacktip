@@ -86,6 +86,10 @@ All notable changes to the Blacktip project are documented here.
   - Better IDE support and error detection
 - **Removed legacy code**:
   - Removed unused `expand_packet_session_data()` function (89 lines)
+  - Removed `examples/` directory with unmaintained example scripts
+    - Removed `db_tool.py` - Use Python API directly instead
+    - Removed `web_example.py` - Had security vulnerabilities, not production-ready
+    - Removed `test_db.py` - Superseded by proper test suite
   - Marked `datafile.py` for deprecation (JSON file support)
 - **Improved error handling**:
   - More descriptive error messages

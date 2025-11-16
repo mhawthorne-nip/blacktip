@@ -22,45 +22,7 @@ blacktip -f arp_data.db -q 192.168.1.100
 blacktip -f arp_data.db -q aa:bb:cc:dd:ee:ff
 ```
 
-## 3. Using the Database Tool
-
-The `db_tool.py` utility provides easy database management:
-
-```bash
-# Show statistics
-python examples/db_tool.py arp_data.db stats
-
-# List recent devices
-python examples/db_tool.py arp_data.db list --limit 20
-
-# Show anomalies
-python examples/db_tool.py arp_data.db anomalies
-
-# Export to JSON
-python examples/db_tool.py arp_data.db export backup.json
-
-# Custom SQL query
-python examples/db_tool.py arp_data.db sql "SELECT * FROM devices WHERE vendor LIKE '%Apple%'"
-```
-
-## 4. Web Interface
-
-Run the example web interface:
-
-```bash
-# Install Flask
-pip install flask
-
-# Set database path
-export BLACKTIP_DB=/var/lib/blacktip/arp_data.db
-
-# Run web server
-python examples/web_example.py
-```
-
-Visit: http://localhost:5000
-
-## 5. Direct SQL Queries
+## 3. Direct SQL Queries
 
 You can query the database directly with sqlite3:
 
@@ -87,7 +49,7 @@ WHERE last_seen > datetime('now', '-1 hour');
 .quit
 ```
 
-## 6. Common Queries
+## 4. Common Queries
 
 ### Find all IPs used by a MAC address
 ```sql
@@ -131,7 +93,7 @@ SELECT
 FROM devices;
 ```
 
-## 7. Integration Examples
+## 5. Integration Examples
 
 ### Python Script
 ```python
@@ -171,7 +133,7 @@ if [ "$COUNT" -gt 100 ]; then
 fi
 ```
 
-## 8. Performance Tips
+## 6. Performance Tips
 
 ### Vacuum Database (reclaim space)
 ```bash
@@ -194,7 +156,7 @@ du -h arp_data.db
 sqlite3 arp_data.db '.dbinfo'
 ```
 
-## 9. Backup
+## 7. Backup
 
 ### Live Backup (while blacktip is running)
 ```bash
@@ -211,7 +173,7 @@ blacktip -f arp_data.db --export-json backup.json
 cp arp_data.db arp_data_backup_$(date +%Y%m%d).db
 ```
 
-## 10. Troubleshooting
+## 8. Troubleshooting
 
 ### Database locked error
 ```bash

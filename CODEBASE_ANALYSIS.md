@@ -67,24 +67,6 @@ If `as_user` contains special characters (`;`, `&&`, `|`), it could execute arbi
 
 ---
 
-### 4. Flask Web Interface Vulnerabilities (web_example.py)
-
-**Severity**: HIGH
-**Status**: Example only, not in production
-
-**Issues Identified**:
-- No authentication/authorization
-- Debug mode enabled (line 234)
-- Binds to 0.0.0.0 (all interfaces)
-- No CSRF protection
-- No rate limiting
-- Potential SQL injection via `/api/query/<address>`
-- No input validation
-
-**Note**: These are documented for future implementation. Current example code should have warnings added.
-
----
-
 ## Best Practices Violations
 
 ### 1. No Version Pinning
@@ -267,7 +249,6 @@ CREATE INDEX idx_nmap_ports_service ON nmap_ports(service_name);
 #### 3. Missing Validations
 - No MAC address format validation before insert
 - No IP address range validation
-- No SQL query validation in db_tool.py
 
 #### 4. Incomplete Cleanup
 - No cleanup of old database connections
