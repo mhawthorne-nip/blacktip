@@ -97,7 +97,7 @@ class Blacktip:
                 time.sleep(1)  # Brief pause before retry
                 continue
 
-            blacktipexec = BlacktipExec()
+            blacktipexec = BlacktipExec(db=db)
             packets_processed = 0
             triggers_fired = 0
 
