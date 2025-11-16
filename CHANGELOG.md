@@ -77,6 +77,19 @@ All notable changes to the Blacktip project are documented here.
   - Improved XML parsing error messages
   - Better subprocess management
 
+### ⚙️ CLI & Default Behavior Changes
+
+- **Nmap scanning now enabled by default**
+  - `--nmap` is now the default behavior (no flag needed)
+  - Automatically runs nmap on new devices with results saved to database
+  - Added `--no-nmap` flag to disable if needed
+  - User-provided `--exec` commands take precedence over default nmap
+- **Metrics collection enabled by default**
+  - `--metrics` is now enabled by default for better visibility
+  - Performance metrics logged every 5 minutes
+  - Added `--no-metrics` flag to disable if needed
+  - Use `--metrics-interval` to adjust logging frequency
+
 ### 🏗️ Code Quality Improvements
 
 - **Fixed global state bug** in `exe.py`

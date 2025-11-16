@@ -140,11 +140,18 @@ def blacktip():
         "-n",
         "--nmap",
         required=False,
-        default=False,
+        default=True,
         action="store_true",
-        help="A hard coded convenience --exec that causes nmap to be run against the IPv4 target "
-        "with nmap-XML formatted output written to the current-working-directory. This option "
-        "cannot be used in conjunction with --exec.",
+        dest="nmap",
+        help="Run nmap against new IPv4 targets with results saved to database (DEFAULT). "
+        "Use --no-nmap to disable. Cannot be used with --exec.",
+    )
+    parser_group3.add_argument(
+        "--no-nmap",
+        required=False,
+        action="store_false",
+        dest="nmap",
+        help="Disable automatic nmap scanning.",
     )
     parser_group3.add_argument(
         "-u",
@@ -189,9 +196,17 @@ def blacktip():
     parser_group4.add_argument(
         "--metrics",
         required=False,
-        default=False,
+        default=True,
         action="store_true",
-        help="Enable metrics collection and periodic logging.",
+        dest="metrics",
+        help="Enable metrics collection and periodic logging (DEFAULT). Use --no-metrics to disable.",
+    )
+    parser_group4.add_argument(
+        "--no-metrics",
+        required=False,
+        action="store_false",
+        dest="metrics",
+        help="Disable metrics collection.",
     )
     parser_group4.add_argument(
         "--metrics-interval",
@@ -204,10 +219,15 @@ def blacktip():
 
     args = parser.parse_args()
 
-    if args.nmap:
-        exe = NMAP_EXEC
+    # Determine which command to execute
+    # Priority: --exec (user specified) > --nmap (default)
+    exec_command = getattr(args, "exec")
+    if exec_command:
+        exe = exec_command  # User provided explicit command, takes precedence
+    elif args.nmap:
+        exe = NMAP_EXEC  # Default nmap execution
     else:
-        exe = getattr(args, "exec")
+        exe = None  # No execution
 
     if args.no_request:
         request_select = "nil"
