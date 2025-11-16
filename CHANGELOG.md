@@ -24,8 +24,14 @@ All notable changes to the Blacktip project are documented here.
   - Network interface name validation
   - Port number validation
 
-### 📦 Dependency Management
+### 📦 Dependency Management & Packaging
 
+- **Modernized to pyproject.toml** (PEP 517/518)
+  - Replaced legacy setup.py with modern pyproject.toml
+  - Consolidated all configuration into single file
+  - Migrated pytest configuration from pytest.ini to pyproject.toml
+  - Added coverage configuration
+  - Backward compatible minimal setup.py shim
 - **Added version pinning** to all dependencies for reproducible builds
   - `scapy[basic]>=2.5.0,<3.0.0`
   - `psutil>=5.9.0,<6.0.0`
