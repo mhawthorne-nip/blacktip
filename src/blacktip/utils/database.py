@@ -193,7 +193,31 @@ class BlacktipDatabase:
                 CREATE INDEX IF NOT EXISTS idx_nmap_ports_scan_id
                 ON nmap_ports(scan_id)
             """)
-            
+
+            # Additional indexes for better performance
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_devices_vendor
+                ON devices(vendor)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_anomalies_type
+                ON anomalies(anomaly_type)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_ports_port
+                ON nmap_ports(port)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_ports_service
+                ON nmap_ports(service_name)
+            """)
+
+            # Run schema migrations to add new columns
+            self._migrate_schema(conn)
+
             # Initialize metadata if not exists
             cursor.execute("""
                 INSERT OR IGNORE INTO metadata (key, value, updated_at) 
@@ -212,7 +236,57 @@ class BlacktipDatabase:
             
             conn.commit()
             _logger.debug("Database initialized successfully")
-    
+
+    def _migrate_schema(self, conn):
+        """Migrate database schema to add new columns if they don't exist
+
+        Args:
+            conn: Active database connection
+        """
+        cursor = conn.cursor()
+
+        # Get existing columns in devices table
+        cursor.execute("PRAGMA table_info(devices)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        # Add new columns to devices table if they don't exist
+        new_device_columns = [
+            ("hostname", "TEXT"),
+            ("device_type", "TEXT"),  # router, server, workstation, mobile, iot
+            ("os_family", "TEXT"),  # Windows, Linux, iOS, Android
+            ("is_gateway", "INTEGER DEFAULT 0"),
+            ("notes", "TEXT"),
+            ("tags", "TEXT"),  # Comma-separated tags
+        ]
+
+        for column_name, column_type in new_device_columns:
+            if column_name not in existing_columns:
+                try:
+                    cursor.execute("ALTER TABLE devices ADD COLUMN {} {}".format(column_name, column_type))
+                    _logger.debug("Added column '{}' to devices table".format(column_name))
+                except Exception as e:
+                    _logger.debug("Could not add column '{}': {}".format(column_name, e))
+
+        # Get existing columns in nmap_ports table
+        cursor.execute("PRAGMA table_info(nmap_ports)")
+        existing_nmap_columns = {row[1] for row in cursor.fetchall()}
+
+        # Add new columns to nmap_ports table if they don't exist
+        new_nmap_port_columns = [
+            ("cpe", "TEXT"),  # Common Platform Enumeration
+            ("banner", "TEXT"),  # Service banner
+        ]
+
+        for column_name, column_type in new_nmap_port_columns:
+            if column_name not in existing_nmap_columns:
+                try:
+                    cursor.execute("ALTER TABLE nmap_ports ADD COLUMN {} {}".format(column_name, column_type))
+                    _logger.debug("Added column '{}' to nmap_ports table".format(column_name))
+                except Exception as e:
+                    _logger.debug("Could not add column '{}': {}".format(column_name, e))
+
+        conn.commit()
+
     def increment_starts(self):
         """Increment the starts counter"""
         with self._get_connection() as conn:
@@ -704,3 +778,78 @@ class BlacktipDatabase:
             """, (scan_id,))
 
             return [dict(row) for row in cursor.fetchall()]
+
+    def cleanup_old_data(self, days_to_keep: int = 90) -> Dict[str, int]:
+        """Remove old data from database based on retention policy
+
+        Args:
+            days_to_keep: Number of days of data to keep (default: 90)
+
+        Returns:
+            Dictionary with counts of deleted records
+        """
+        _logger.info("Cleaning up data older than {} days".format(days_to_keep))
+
+        cutoff_date = timestamp()
+        # Calculate cutoff date (simplified - in production use datetime properly)
+        # For now, we'll use a simple approach
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            deleted = {}
+
+            # Delete old ARP events
+            cursor.execute("""
+                DELETE FROM arp_events
+                WHERE datetime(timestamp) < datetime('now', '-{} days')
+            """.format(days_to_keep))
+            deleted['arp_events'] = cursor.rowcount
+
+            # Delete old anomalies
+            cursor.execute("""
+                DELETE FROM anomalies
+                WHERE datetime(timestamp) < datetime('now', '-{} days')
+            """.format(days_to_keep))
+            deleted['anomalies'] = cursor.rowcount
+
+            # Delete old nmap scans (and ports via CASCADE)
+            cursor.execute("""
+                DELETE FROM nmap_scans
+                WHERE datetime(scan_start) < datetime('now', '-{} days')
+            """.format(days_to_keep))
+            deleted['nmap_scans'] = cursor.rowcount
+
+            # Delete devices not seen in retention period
+            cursor.execute("""
+                DELETE FROM devices
+                WHERE datetime(last_seen) < datetime('now', '-{} days')
+            """.format(days_to_keep))
+            deleted['devices'] = cursor.rowcount
+
+            conn.commit()
+
+        _logger.info("Cleanup complete: {}".format(deleted))
+        return deleted
+
+    def vacuum_database(self) -> None:
+        """Vacuum the database to reclaim space and optimize performance"""
+        _logger.info("Vacuuming database: {}".format(self.db_path))
+        try:
+            with self._get_connection() as conn:
+                conn.execute("VACUUM")
+                conn.execute("ANALYZE")
+            _logger.info("Database vacuum complete")
+        except Exception as e:
+            _logger.error("Failed to vacuum database: {}".format(e))
+
+    def get_database_size(self) -> int:
+        """Get the size of the database file in bytes
+
+        Returns:
+            Size in bytes
+        """
+        try:
+            return os.path.getsize(self.db_path)
+        except Exception as e:
+            _logger.error("Failed to get database size: {}".format(e))
+            return 0

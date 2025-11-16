@@ -1,8 +1,8 @@
 import time
 import subprocess
 import shlex
-import os
 from threading import Thread
+from typing import Optional, Dict, Any, List
 import psutil
 
 from blacktip import __exec_max_runtime__ as EXEC_MAX_RUNTIME
@@ -12,8 +12,7 @@ from .nmap_parser import parse_nmap_xml
 
 
 class BlacktipExec:
-
-    subprocess_list = []
+    """Execute commands asynchronously with proper security and error handling"""
 
     def __init__(self, db=None):
         """Initialize BlacktipExec
@@ -22,40 +21,69 @@ class BlacktipExec:
             db: BlacktipDatabase instance for storing nmap results (optional)
         """
         self.db = db
+        self.subprocess_list: List[Dict[str, Any]] = []  # Instance variable, not class variable
 
-    def async_command_exec_thread(self, exec_command, packet_data, as_user=None):
+    def async_command_exec_thread(self, exec_command: str, packet_data: Dict[str, Any], as_user: Optional[str] = None) -> None:
+        """Execute command asynchronously in a thread
+
+        Args:
+            exec_command: Command template with {IP}, {HW}, {TS} placeholders
+            packet_data: Packet data dictionary with ip/hw information
+            as_user: Optional user to execute command as (via sudo)
+        """
         if exec_command is None:
             return
 
-        logger.debug("Blacktip.async_command_exec(<exec_command>, <packet_data>, <as_user>)")
+        logger.debug("BlacktipExec.async_command_exec_thread(exec_command={}, as_user={})".format(
+            exec_command[:50] + "..." if len(exec_command) > 50 else exec_command,
+            as_user
+        ))
 
         try:
+            # Format command with packet data
             command_line = exec_command.format(
                 IP=packet_data["ip"]["addr"],
                 HW=packet_data["hw"]["addr"],
                 TS=timestamp(),
                 ts=timestamp().replace("+00:00", "").replace(":", "").replace("-", "").replace("T", "Z"),
             )
-        except KeyError:
-            logger.critical("Unsupported {KEY} supplied in exec command, valid values are {IP}, {HW} and {TS}")
-            exit(1)
+        except KeyError as e:
+            logger.error("Unsupported {{KEY}} in exec command: {}. Valid values are {{IP}}, {{HW}}, {{TS}}".format(e))
+            return  # Don't exit, just skip this command
+        except Exception as e:
+            logger.error("Error formatting exec command: {}".format(e))
+            return
 
+        # If as_user specified, construct sudo command securely
         if as_user is not None:
-            command_line = "sudo -u {} {}".format(as_user, command_line)
+            # Validate username (prevent injection)
+            if not as_user.replace('_', '').replace('-', '').isalnum():
+                logger.error("Invalid username for sudo: {}. Username must be alphanumeric with _ or -".format(as_user))
+                return
 
-        thread = Thread(target=self.command_exec, args=(command_line,))
+            # Build command as list for security
+            cmd_parts = shlex.split(command_line)
+            command_line = ['sudo', '-u', as_user] + cmd_parts
+
+        thread = Thread(target=self.command_exec, args=(command_line,), daemon=True)
         thread.start()
 
-    def async_command_exec_threads_wait(self, wait_max=EXEC_MAX_RUNTIME):
+    def async_command_exec_threads_wait(self, wait_max: int = EXEC_MAX_RUNTIME) -> None:
+        """Wait for async command threads to complete
+
+        Args:
+            wait_max: Maximum time to wait in seconds
+        """
         wait_elapsed = 0
         wait_start = time.time()
-        logger.debug("Blacktip.async_command_exec_threads_wait(wait_max={})".format(wait_max))
+        logger.debug("BlacktipExec.async_command_exec_threads_wait(wait_max={})".format(wait_max))
 
         while len(self.subprocess_list) > 0 and wait_elapsed < wait_max:
             for i in range(len(self.subprocess_list) - 1, -1, -1):  # Iterate backwards for safe removal
                 sp_data = self.subprocess_list[i]
                 sp = sp_data['process']
                 is_nmap = sp_data['is_nmap']
+                command = sp_data.get('command', 'unknown')
 
                 if sp.poll() is not None:
                     # Process has completed
@@ -71,95 +99,145 @@ class BlacktipExec:
                                     logger.info("Nmap scan saved to database for {}".format(
                                         scan_data.get('ip_address')))
                                 else:
-                                    logger.warning("Failed to parse nmap XML output")
+                                    logger.warning("Failed to parse nmap XML output for command: {}".format(command[:100]))
+                            else:
+                                logger.warning("Nmap command produced no output: {}".format(command[:100]))
+                        except subprocess.TimeoutExpired:
+                            logger.error("Timeout waiting for nmap output: {}".format(command[:100]))
                         except Exception as e:
-                            logger.error("Failed to process nmap output: {}".format(e))
+                            logger.error("Failed to process nmap output for command '{}': {}".format(command[:100], e))
                     elif sp.returncode > 0:
-                        stdout, stderr = sp.communicate(timeout=1) if sp.stdout else (None, None)
-                        if stderr:
-                            logger.warning("exec thread returned error: {}".format(stderr.decode('utf-8', errors='ignore')[:200]))
-                        else:
-                            logger.warning("exec thread returned with non-zero returncode: {}".format(sp.returncode))
+                        # Command failed
+                        try:
+                            stdout, stderr = sp.communicate(timeout=1) if sp.stdout else (None, None)
+                            if stderr:
+                                logger.warning("Command '{}' returned error (code {}): {}".format(
+                                    command[:100], sp.returncode, stderr.decode('utf-8', errors='ignore')[:200]))
+                            else:
+                                logger.warning("Command '{}' returned non-zero code: {}".format(
+                                    command[:100], sp.returncode))
+                        except subprocess.TimeoutExpired:
+                            logger.warning("Command '{}' failed (code {}) and timed out reading output".format(
+                                command[:100], sp.returncode))
+                        except Exception as e:
+                            logger.error("Error reading output from failed command '{}': {}".format(command[:100], e))
 
                     self.subprocess_list.pop(i)
+
             time.sleep(0.10)  # 100ms
             wait_elapsed = time.time() - wait_start
 
-        # Clean up any remaining processes
+        # Clean up any remaining processes that exceeded timeout
+        if len(self.subprocess_list) > 0:
+            logger.warning("Terminating {} subprocess(es) that exceeded timeout of {}s".format(
+                len(self.subprocess_list), wait_max))
+
         for i in range(len(self.subprocess_list) - 1, -1, -1):
             sp_data = self.subprocess_list[i]
             sp = sp_data['process']
+            command = sp_data.get('command', 'unknown')
             if sp.poll() is None:
+                logger.warning("Terminating subprocess that exceeded timeout: {}".format(command[:100]))
                 self.terminate_process(sp.pid)
                 self.subprocess_list.pop(i)
-        logger.debug("Blacktip.async_command_exec_threads_wait() - done")
 
-    def command_exec(self, command_line):
-        logger.debug('Blacktip.command_exec(command_line="{}")'.format(command_line))
+        logger.debug("BlacktipExec.async_command_exec_threads_wait() - done")
+
+    def command_exec(self, command_line) -> None:
+        """Execute command and store process handle
+
+        Args:
+            command_line: Command as string or list of arguments
+        """
+        # Convert to string for logging and nmap detection
+        if isinstance(command_line, list):
+            command_str = ' '.join(command_line)
+        else:
+            command_str = command_line
+
+        logger.debug('BlacktipExec.command_exec(command_line="{}")'.format(
+            command_str[:100] + "..." if len(command_str) > 100 else command_str
+        ))
 
         # Check if this is an nmap command
-        is_nmap = 'nmap' in command_line.lower() and '-oX' in command_line
+        is_nmap = 'nmap' in command_str.lower() and '-oX' in command_str
 
         try:
-            # Parse command securely - don't use shell=True to prevent injection
-            if os.name == 'nt':  # Windows
-                # On Windows, we need shell for some commands
-                process = subprocess.Popen(
-                    command_line,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    stdin=subprocess.DEVNULL
-                )
-            else:  # Unix/Linux
-                # On Unix, use shlex.split for security
+            # Parse command securely - NEVER use shell=True
+            if isinstance(command_line, list):
+                # Already a list (e.g., from sudo construction)
+                cmd_parts = command_line
+            else:
+                # Parse string into list
                 try:
                     cmd_parts = shlex.split(command_line)
-                    process = subprocess.Popen(
-                        cmd_parts,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        stdin=subprocess.DEVNULL
-                    )
                 except ValueError as e:
                     logger.error('Failed to parse command: {}'.format(e))
                     return
 
+            # Execute without shell for security (Linux only - no Windows support)
+            process = subprocess.Popen(
+                cmd_parts,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                shell=False  # NEVER use shell=True
+            )
+
             # Store process with metadata
             self.subprocess_list.append({
                 'process': process,
-                'is_nmap': is_nmap
+                'is_nmap': is_nmap,
+                'command': command_str[:200]  # Store truncated command for debugging
             })
             logger.debug('Started subprocess with PID: {}'.format(process.pid))
-        except Exception as e:
-            logger.error('Failed to execute command: {}'.format(e))
 
-    def terminate_process(self, pid):
-        logger.warning("Blacktip.terminate_process(pid={})".format(pid))
+        except FileNotFoundError as e:
+            logger.error('Command not found: {}. Error: {}'.format(cmd_parts[0] if cmd_parts else 'unknown', e))
+        except PermissionError as e:
+            logger.error('Permission denied executing command: {}. Error: {}'.format(command_str[:100], e))
+        except Exception as e:
+            logger.error('Failed to execute command: {}. Error: {}'.format(command_str[:100], e))
+
+    def terminate_process(self, pid: int) -> None:
+        """Terminate a process gracefully, then forcefully if needed
+
+        Args:
+            pid: Process ID to terminate
+        """
+        logger.warning("BlacktipExec.terminate_process(pid={})".format(pid))
 
         try:
-            # https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
             process = psutil.Process(pid)
+
+            # Terminate all child processes first
             for process_child in process.children(recursive=True):
                 try:
                     process_child.terminate()
                 except psutil.NoSuchProcess:
                     pass
+
+            # Terminate parent process
             process.terminate()
-            
+
             # Wait up to 5 seconds for graceful termination
             try:
                 process.wait(timeout=5)
+                logger.debug("Process {} terminated gracefully".format(pid))
             except psutil.TimeoutExpired:
                 # Force kill if still running
-                logger.warning("Process {} did not terminate, forcing kill".format(pid))
+                logger.warning("Process {} did not terminate gracefully, forcing kill".format(pid))
                 for process_child in process.children(recursive=True):
                     try:
                         process_child.kill()
                     except psutil.NoSuchProcess:
                         pass
                 process.kill()
+                logger.debug("Process {} forcefully killed".format(pid))
+
         except psutil.NoSuchProcess:
             logger.debug("Process {} already terminated".format(pid))
+        except PermissionError as e:
+            logger.error("Permission denied terminating process {}: {}".format(pid, e))
         except Exception as e:
             logger.error("Error terminating process {}: {}".format(pid, e))
