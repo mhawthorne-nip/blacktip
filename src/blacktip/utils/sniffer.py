@@ -1,6 +1,7 @@
 
 import logging
-from ouilookup import OuiLookup
+from typing import Optional, Dict, List, Any
+from mac_vendor_lookup import MacLookup, BaseMacLookup
 
 from .utils import timestamp
 from blacktip.exceptions import BlacktipException
@@ -12,46 +13,65 @@ from scapy.all import sniff, ARP
 
 
 class BlacktipSniffer:
-    
+    """ARP packet sniffer with vendor lookup and anomaly detection"""
+
     def __init__(self):
-        """Initialize sniffer with OUI lookup cache"""
-        self._oui_cache = {}
-        self._oui_lookup = None
+        """Initialize sniffer with MAC vendor lookup cache"""
+        self._vendor_cache: Dict[str, str] = {}
+        self._mac_lookup: Optional[BaseMacLookup] = None
         try:
-            self._oui_lookup = OuiLookup()
+            self._mac_lookup = MacLookup()
+            # Update the vendor database on first run
+            try:
+                self._mac_lookup.update_vendors()
+                logging.debug("MAC vendor database updated successfully")
+            except Exception as e:
+                logging.debug("Could not update MAC vendor database: {}".format(e))
         except Exception as e:
-            logging.warning("Failed to initialize OUI lookup: {}".format(e))
-    
-    def get_hw_vendor(self, hw_address):
-        """Get hardware vendor with caching and error handling"""
+            logging.warning("Failed to initialize MAC vendor lookup: {}".format(e))
+
+    def get_hw_vendor(self, hw_address: str) -> str:
+        """Get hardware vendor with caching and error handling
+
+        Args:
+            hw_address: MAC address in standard format (XX:XX:XX:XX:XX:XX)
+
+        Returns:
+            Vendor name or "Unknown" if not found
+        """
         if not hw_address or hw_address == "00:00:00:00:00:00":
             return "Unknown"
-        
+
         # Check cache first
-        if hw_address in self._oui_cache:
-            return self._oui_cache[hw_address]
-        
-        # Try OUI lookup
+        if hw_address in self._vendor_cache:
+            return self._vendor_cache[hw_address]
+
+        # Try MAC vendor lookup
         vendor = "Unknown"
-        if self._oui_lookup:
+        if self._mac_lookup:
             try:
-                result = self._oui_lookup.query(hw_address)
-                if result and len(result) > 0 and isinstance(result[0], dict):
-                    vendor = list(result[0].values())[0] if result[0].values() else "Unknown"
+                vendor = self._mac_lookup.lookup(hw_address)
+                if not vendor:
+                    vendor = "Unknown"
+            except KeyError:
+                # MAC not found in database
+                logging.debug("MAC vendor not found for: {}".format(hw_address))
+                vendor = "Unknown"
             except Exception as e:
-                logging.debug("OUI lookup failed for {}: {}".format(hw_address, e))
-        
+                logging.debug("MAC vendor lookup failed for {}: {}".format(hw_address, e))
+                vendor = "Unknown"
+
         # Cache the result (even if Unknown to avoid repeated lookups)
-        self._oui_cache[hw_address] = vendor
+        self._vendor_cache[hw_address] = vendor
         return vendor
     
-    def process_packet(self, packet, db):
+    def process_packet(self, packet: Dict[str, Any], db) -> Optional[Dict[str, Any]]:
         """Process a packet and update database
-        
+
         Args:
             packet: Parsed ARP packet dictionary
             db: BlacktipDatabase instance
-            
+
         Returns:
             packet_data dictionary or None if invalid
         """
@@ -103,8 +123,15 @@ class BlacktipSniffer:
 
         return packet_data
     
-    def sniff_arp_packet_batch(self, interface=None):
+    def sniff_arp_packet_batch(self, interface: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Sniff a batch of ARP packets from the network
 
+        Args:
+            interface: Network interface to sniff on (None for all interfaces)
+
+        Returns:
+            List of parsed ARP packet dictionaries
+        """
         packets = []
         try:
             kwargs = {
@@ -157,8 +184,19 @@ class BlacktipSniffer:
 
         return packets
 
-    def scrub_address(self, address_type, address):
-        """Scrub and validate addresses"""
+    def scrub_address(self, address_type: str, address: str) -> str:
+        """Scrub and validate IP or MAC addresses
+
+        Args:
+            address_type: Type of address ('ip' or 'hw')
+            address: Address string to validate
+
+        Returns:
+            Validated address or empty string if invalid
+
+        Raises:
+            BlacktipException: If address_type is not supported
+        """
         if not address:
             return ""
         
@@ -185,93 +223,3 @@ class BlacktipSniffer:
             return ""
         else:
             raise BlacktipException("unsupported address_type", address_type)
-
-    def expand_packet_session_data(self, packet, session):
-
-        hw_address_is_new = False
-        ip_address_is_new = False
-        anomalies = []
-
-        hw_address = packet["src"]["hw"]
-        ip_address = packet["src"]["ip"]
-        
-        if not hw_address or not ip_address:
-            logging.warning("Invalid packet: hw={} ip={}".format(hw_address, ip_address))
-            return None, session
-
-        # lookup hw_vendor name with caching
-        hw_vendor = self.get_hw_vendor(hw_address)
-        
-        # Detect gratuitous ARP (announcement)
-        is_gratuitous = (packet["src"]["ip"] == packet["dst"]["ip"])
-        
-        # Detect potential ARP spoofing/conflicts
-        # Check if this IP was previously seen with a different MAC
-        if ip_address in session["ip"]:
-            existing_macs = list(session["ip"][ip_address].keys())
-            if existing_macs and hw_address not in existing_macs:
-                anomalies.append({
-                    "type": "ip_mac_conflict",
-                    "message": "IP {} previously seen with MAC {}, now with {}".format(
-                        ip_address, existing_macs[0], hw_address
-                    ),
-                    "ts": timestamp()
-                })
-                logging.warning("Potential ARP spoofing: {}".format(anomalies[-1]["message"]))
-        
-        # Check if this MAC was previously seen with a different IP
-        if hw_address in session["hw"]:
-            existing_ips = list(session["hw"][hw_address].keys())
-            if existing_ips and ip_address not in existing_ips:
-                # This is normal for DHCP, but worth noting
-                logging.info("MAC {} changed IP from {} to {}".format(
-                    hw_address, existing_ips[-1], ip_address
-                ))
-
-        # update session['ip'] data
-        if ip_address not in session["ip"].keys():
-            ip_address_is_new = True
-            session["ip"][ip_address] = {}
-        if hw_address not in session["ip"][ip_address].keys():
-            session["ip"][ip_address][hw_address] = {
-                "count": 0,
-                "ts_first": timestamp(),
-                "ts_last": None,
-                "packets": {"request": 0, "reply": 0}
-            }
-        session["ip"][ip_address][hw_address]["count"] += 1
-        session["ip"][ip_address][hw_address]["ts_last"] = timestamp()
-        session["ip"][ip_address][hw_address]["hw_vendor"] = hw_vendor
-        session["ip"][ip_address][hw_address]["packets"][packet["op"]] += 1
-
-        # update session['hw'] data
-        if hw_address not in session["hw"].keys():
-            hw_address_is_new = True
-            session["hw"][hw_address] = {}
-        if ip_address not in session["hw"][hw_address].keys():
-            session["hw"][hw_address][ip_address] = {
-                "count": 0,
-                "ts_first": timestamp(),
-                "ts_last": None,
-                "packets": {"request": 0, "reply": 0}
-            }
-        session["hw"][hw_address][ip_address]["count"] += 1
-        session["hw"][hw_address][ip_address]["ts_last"] = timestamp()
-        session["hw"][hw_address][ip_address]["hw_vendor"] = hw_vendor
-        session["hw"][hw_address][ip_address]["packets"][packet["op"]] += 1
-        
-        # Add anomalies tracking to session if not present
-        if "anomalies" not in session:
-            session["anomalies"] = []
-        session["anomalies"].extend(anomalies)
-
-        packet_data = {
-            "op": packet["op"],
-            "ip": {"addr": ip_address, "new": ip_address_is_new},
-            "hw": {"addr": hw_address, "new": hw_address_is_new, "vendor": hw_vendor},
-            "gratuitous": is_gratuitous,
-            "anomalies": anomalies if anomalies else None,
-            "ts": packet.get("ts", timestamp())
-        }
-
-        return packet_data, session

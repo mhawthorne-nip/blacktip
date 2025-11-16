@@ -1,0 +1,11 @@
+# Blacktip Network Security Scanner - Requirements
+# Updated with version pinning for security and reproducibility
+
+# Core dependencies
+scapy[basic]>=2.5.0,<3.0.0
+psutil>=5.9.0,<6.0.0
+mac-vendor-lookup>=0.1.0,<1.0.0
+validators>=0.20.0,<1.0.0
+
+# Optional dependencies
+# Install with: pip install -r requirements.txt -r requirements-optional.txt

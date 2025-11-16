@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blacktip"
+version = "1.0.0"
+description = "Passive network security scanner for real-time ARP traffic analysis, device fingerprinting, and threat detection on Linux systems"
+readme = "README.md"
+requires-python = ">=3.8.0"
+authors = [
+    {name = "Michael Hawthorne", email = "mph005@gmail.com"}
+]
+keywords = [
+    "blacktip",
+    "arp",
+    "network",
+    "security",
+    "monitoring",
+    "anomaly-detection",
+    "linux",
+    "network-security",
+    "packet-sniffing",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+]
+
+dependencies = [
+    "scapy[basic]>=2.5.0,<3.0.0",
+    "psutil>=5.9.0,<6.0.0",
+    "mac-vendor-lookup>=0.1.0,<1.0.0",
+    "validators>=0.20.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+yaml = [
+    "PyYAML>=5.1,<7.0",
+]
+dev = [
+    "pytest>=6.0,<9.0",
+    "pytest-cov>=2.10,<6.0",
+    "pytest-timeout>=2.1,<3.0",
+]
+all = [
+    "blacktip[yaml,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/mhawthorne-nip/blacktip"
+Documentation = "https://github.com/mhawthorne-nip/blacktip/blob/main/README.md"
+Repository = "https://github.com/mhawthorne-nip/blacktip"
+Changelog = "https://github.com/mhawthorne-nip/blacktip/blob/main/CHANGELOG.md"
+
+[project.scripts]
+blacktip = "blacktip.cli.entrypoints:blacktip"
+
+[tool.setuptools]
+zip-safe = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["test", "test.*", "tests", "tests.*", "docs", "docs.*"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+]
+timeout = 300
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src/blacktip"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
