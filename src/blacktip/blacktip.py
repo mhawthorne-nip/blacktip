@@ -21,13 +21,6 @@ class Blacktip:
     def do_version(self):
         logger.debug("do_version()")
         return {"version": VERSION}
-    
-    def do_export_json(self, datafile, output_file):
-        logger.debug("do_export_json()")
-        db = BlacktipDatabase(datafile)
-        db.export_to_json(output_file)
-        logger.info("Database exported to {}".format(output_file))
-        print("Database exported to: {}".format(output_file))
 
     def do_query(self, datafile, query):
         logger.debug("do_query()")
