@@ -24,8 +24,9 @@ def blacktip():
         epilog="{} v{}".format(NAME, VERSION),
         add_help=True,
         description="""
-            A modern network monitoring tool with JSON formatted outputs and easy options to execute commands when network
-            changes are observed.
+            Passive network security scanner for real-time ARP traffic analysis, device fingerprinting, and threat
+            detection on Linux systems. Monitors ARP packets to discover devices, track network changes, and detect
+            potential security threats with zero active network traffic generation.
         """,
     )
 
@@ -66,7 +67,7 @@ def blacktip():
         required=False,
         default=False,
         action="store_true",
-        help="Select ARP request packet events that include new ip/hw addresses not yet observed (DEFAULT).",
+        help="Report ARP request packets with new IP/MAC addresses not yet observed (default behavior if no request flags specified).",
     )
 
     parser_group1.add_argument(
@@ -84,7 +85,7 @@ def blacktip():
         required=False,
         default=False,
         action="store_true",
-        help="Select all ARP request packet events regardless if addresses have been previously observed.",
+        help="Report all ARP request packets regardless of whether addresses have been previously observed.",
     )
 
     # parser_group2 - reply
@@ -96,7 +97,7 @@ def blacktip():
         required=False,
         default=False,
         action="store_true",
-        help="Select only reply packet events that include new ip/hw addresses not yet observed (DEFAULT).",
+        help="Report ARP reply packets with new IP/MAC addresses not yet observed (default behavior if no reply flags specified).",
     )
 
     parser_group2.add_argument(
@@ -114,7 +115,7 @@ def blacktip():
         required=False,
         default=False,
         action="store_true",
-        help="Select all ARP reply packet events regardless if the addresses have been previously observed.",
+        help="Report all ARP reply packets regardless of whether addresses have been previously observed.",
     )
 
     # parser_group3
@@ -133,7 +134,8 @@ def blacktip():
         required=False,
         type=str,
         metavar="<command>",
-        help="Command line to exec on selected ARP events.  Commands are run async ",
+        help="Command line to exec on selected ARP events. Commands are run asynchronously. "
+        "If specified, this disables automatic nmap scanning.",
     )
     parser_group3.add_argument(
         "-n",
@@ -142,8 +144,8 @@ def blacktip():
         default=True,
         action="store_true",
         dest="nmap",
-        help="Run nmap against new IPv4 targets with results saved to database (DEFAULT). "
-        "Use --no-nmap to disable. Cannot be used with --exec.",
+        help="Run nmap against new IPv4 targets with results saved to database (enabled by DEFAULT). "
+        "Use --no-nmap to disable.",
     )
     parser_group3.add_argument(
         "--no-nmap",
