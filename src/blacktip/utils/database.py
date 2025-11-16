@@ -147,7 +147,47 @@ class BlacktipDatabase:
                     FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
                 )
             """)
-            
+
+            # NetBIOS/SMB information table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_netbios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    netbios_computer_name TEXT,
+                    netbios_domain_name TEXT,
+                    netbios_workgroup TEXT,
+                    netbios_user TEXT,
+                    netbios_mac TEXT,
+                    smb_os TEXT,
+                    smb_computer_name TEXT,
+                    smb_domain_name TEXT,
+                    smb_domain_dns TEXT,
+                    smb_forest_dns TEXT,
+                    smb_fqdn TEXT,
+                    smb_system_time TEXT,
+                    smb_dialects TEXT,
+                    smb_signing_enabled INTEGER,
+                    smb_signing_required INTEGER,
+                    smb_message_signing TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE,
+                    UNIQUE(scan_id)
+                )
+            """)
+
+            # mDNS/Bonjour services table (one-to-many with scans)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_mdns_services (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    service_name TEXT,
+                    service_type TEXT,
+                    port INTEGER,
+                    target TEXT,
+                    txt_records TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
+
             # Create indexes for performance
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_devices_ip 
@@ -213,6 +253,26 @@ class BlacktipDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_nmap_ports_service
                 ON nmap_ports(service_name)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_netbios_scan_id
+                ON nmap_netbios(scan_id)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_netbios_computer_name
+                ON nmap_netbios(netbios_computer_name)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_mdns_scan_id
+                ON nmap_mdns_services(scan_id)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_mdns_service_type
+                ON nmap_mdns_services(service_type)
             """)
 
             # Run schema migrations to add new columns
@@ -578,6 +638,8 @@ class BlacktipDatabase:
                 - os_accuracy: OS detection accuracy (optional)
                 - uptime_seconds: Host uptime in seconds (optional)
                 - ports: List of port dictionaries (optional)
+                - netbios: Dictionary of NetBIOS/SMB information (optional)
+                - mdns_services: List of mDNS/Bonjour service dictionaries (optional)
 
         Returns:
             scan_id: The ID of the inserted scan record
@@ -630,8 +692,61 @@ class BlacktipDatabase:
                     port.get('service_extrainfo')
                 ))
 
-            _logger.debug("Nmap scan inserted with ID {} ({} ports)".format(
-                scan_id, len(ports)))
+            # Insert NetBIOS/SMB data if any
+            netbios = scan_data.get('netbios')
+            if netbios:
+                cursor.execute("""
+                    INSERT INTO nmap_netbios
+                    (scan_id, netbios_computer_name, netbios_domain_name,
+                     netbios_workgroup, netbios_user, netbios_mac,
+                     smb_os, smb_computer_name, smb_domain_name,
+                     smb_domain_dns, smb_forest_dns, smb_fqdn,
+                     smb_system_time, smb_dialects, smb_signing_enabled,
+                     smb_signing_required, smb_message_signing)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    netbios.get('netbios_computer_name'),
+                    netbios.get('netbios_domain_name'),
+                    netbios.get('netbios_workgroup'),
+                    netbios.get('netbios_user'),
+                    netbios.get('netbios_mac'),
+                    netbios.get('smb_os'),
+                    netbios.get('smb_computer_name'),
+                    netbios.get('smb_domain_name'),
+                    netbios.get('smb_domain_dns'),
+                    netbios.get('smb_forest_dns'),
+                    netbios.get('smb_fqdn'),
+                    netbios.get('smb_system_time'),
+                    netbios.get('smb_dialects'),
+                    netbios.get('smb_signing_enabled'),
+                    netbios.get('smb_signing_required'),
+                    netbios.get('smb_message_signing')
+                ))
+                _logger.debug("NetBIOS/SMB data inserted for scan ID {}".format(scan_id))
+
+            # Insert mDNS/Bonjour services if any
+            mdns_services = scan_data.get('mdns_services', [])
+            if mdns_services:
+                for service in mdns_services:
+                    cursor.execute("""
+                        INSERT INTO nmap_mdns_services
+                        (scan_id, service_name, service_type, port, target, txt_records)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        scan_id,
+                        service.get('service_name'),
+                        service.get('service_type'),
+                        service.get('port'),
+                        service.get('target'),
+                        service.get('txt_records')
+                    ))
+                _logger.debug("Inserted {} mDNS service(s) for scan ID {}".format(len(mdns_services), scan_id))
+
+            _logger.debug("Nmap scan inserted with ID {} ({} ports{}{})".format(
+                scan_id, len(ports),
+                ", with NetBIOS data" if netbios else "",
+                ", {} mDNS service(s)".format(len(mdns_services)) if mdns_services else ""))
 
             return scan_id
 
@@ -683,6 +798,31 @@ class BlacktipDatabase:
                 """, (scan['id'],))
 
                 scan['ports'] = [dict(port_row) for port_row in cursor.fetchall()]
+
+                # Get NetBIOS/SMB data for this scan
+                cursor.execute("""
+                    SELECT * FROM nmap_netbios
+                    WHERE scan_id = ?
+                """, (scan['id'],))
+
+                netbios_row = cursor.fetchone()
+                if netbios_row:
+                    scan['netbios'] = dict(netbios_row)
+                else:
+                    scan['netbios'] = None
+
+                # Get mDNS/Bonjour services for this scan
+                cursor.execute("""
+                    SELECT * FROM nmap_mdns_services
+                    WHERE scan_id = ?
+                """, (scan['id'],))
+
+                mdns_rows = cursor.fetchall()
+                if mdns_rows:
+                    scan['mdns_services'] = [dict(service_row) for service_row in mdns_rows]
+                else:
+                    scan['mdns_services'] = None
+
                 scans.append(scan)
 
             return scans

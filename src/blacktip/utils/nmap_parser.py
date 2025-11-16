@@ -5,6 +5,205 @@ from datetime import datetime
 from . import logger
 
 
+def _parse_netbios_scripts(host) -> Optional[Dict]:
+    """Parse NetBIOS/SMB NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        Dictionary containing NetBIOS/SMB data, or None if no data found
+    """
+    netbios_data = {}
+
+    # Look for hostscript (host-level scripts)
+    hostscript = host.find('hostscript')
+    if hostscript is None:
+        return None
+
+    # Parse nbstat script (NetBIOS name service)
+    nbstat_script = None
+    for script in hostscript.findall('script'):
+        if script.get('id') == 'nbstat':
+            nbstat_script = script
+            break
+
+    if nbstat_script is not None:
+        # Parse NetBIOS names from table
+        for table in nbstat_script.findall('table'):
+            if table.get('key') == 'names':
+                for elem in table.findall('elem'):
+                    elem_key = elem.get('key')
+                    elem_value = elem.text
+
+                    # Common NetBIOS name types
+                    if 'server_name' in elem_key or 'computer_name' in elem_key:
+                        netbios_data['netbios_computer_name'] = elem_value
+                    elif 'domain_name' in elem_key or 'workgroup' in elem_key:
+                        netbios_data['netbios_workgroup'] = elem_value
+                    elif 'user' in elem_key:
+                        netbios_data['netbios_user'] = elem_value
+
+        # Get MAC address from nbstat if available
+        for elem in nbstat_script.findall('elem'):
+            if elem.get('key') == 'mac':
+                netbios_data['netbios_mac'] = elem.text
+
+    # Parse smb-os-discovery script
+    smb_os_script = None
+    for script in hostscript.findall('script'):
+        if script.get('id') == 'smb-os-discovery':
+            smb_os_script = script
+            break
+
+    if smb_os_script is not None:
+        for elem in smb_os_script.findall('elem'):
+            key = elem.get('key')
+            value = elem.text
+
+            if key == 'os':
+                netbios_data['smb_os'] = value
+            elif key == 'computer_name' or key == 'netbios_computer_name':
+                netbios_data['smb_computer_name'] = value
+            elif key == 'domain_name' or key == 'netbios_domain_name':
+                netbios_data['smb_domain_name'] = value
+            elif key == 'domain_dns':
+                netbios_data['smb_domain_dns'] = value
+            elif key == 'forest_dns':
+                netbios_data['smb_forest_dns'] = value
+            elif key == 'fqdn':
+                netbios_data['smb_fqdn'] = value
+            elif key == 'system_time':
+                netbios_data['smb_system_time'] = value
+
+    # Parse smb-protocols script
+    smb_protocols_script = None
+    for script in hostscript.findall('script'):
+        if script.get('id') == 'smb-protocols':
+            smb_protocols_script = script
+            break
+
+    if smb_protocols_script is not None:
+        # Collect dialects/protocols
+        dialects = []
+        for table in smb_protocols_script.findall('table'):
+            if table.get('key') == 'dialects':
+                for elem in table.findall('elem'):
+                    if elem.text:
+                        dialects.append(elem.text)
+
+        if dialects:
+            netbios_data['smb_dialects'] = ', '.join(dialects)
+
+    # Parse smb-security-mode script
+    smb_security_script = None
+    for script in hostscript.findall('script'):
+        if script.get('id') == 'smb-security-mode':
+            smb_security_script = script
+            break
+
+    if smb_security_script is not None:
+        for elem in smb_security_script.findall('elem'):
+            key = elem.get('key')
+            value = elem.text
+
+            if key == 'message_signing':
+                netbios_data['smb_message_signing'] = value
+                # Also parse enabled/required from the message_signing value
+                if value:
+                    if 'enabled' in value.lower():
+                        netbios_data['smb_signing_enabled'] = 1
+                    if 'required' in value.lower():
+                        netbios_data['smb_signing_required'] = 1
+
+    # Return None if no NetBIOS data was found
+    if not netbios_data:
+        return None
+
+    logger.debug("Parsed NetBIOS data: {}".format(netbios_data))
+    return netbios_data
+
+
+def _parse_mdns_scripts(host) -> Optional[List[Dict]]:
+    """Parse mDNS/Bonjour DNS-SD NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of service dictionaries, or None if no services found
+    """
+    services = []
+
+    # Look for hostscript (host-level scripts)
+    hostscript = host.find('hostscript')
+    if hostscript is None:
+        return None
+
+    # Parse dns-service-discovery script
+    dns_sd_script = None
+    for script in hostscript.findall('script'):
+        if script.get('id') == 'dns-service-discovery':
+            dns_sd_script = script
+            break
+
+    if dns_sd_script is None:
+        return None
+
+    # Parse service tables - each service is in its own table
+    for service_table in dns_sd_script.findall('table'):
+        service_data = {
+            'service_name': None,
+            'service_type': None,
+            'port': None,
+            'target': None,
+            'txt_records': []
+        }
+
+        # Get service instance name (if available)
+        service_name = service_table.get('key')
+        if service_name:
+            service_data['service_name'] = service_name
+
+        # Parse service details
+        for elem in service_table.findall('elem'):
+            key = elem.get('key')
+            value = elem.text
+
+            if key == 'service':
+                service_data['service_type'] = value
+            elif key == 'port':
+                try:
+                    service_data['port'] = int(value)
+                except (ValueError, TypeError):
+                    pass
+            elif key == 'target':
+                service_data['target'] = value
+
+        # Parse TXT records table
+        for txt_table in service_table.findall('table'):
+            if txt_table.get('key') == 'txt':
+                for txt_elem in txt_table.findall('elem'):
+                    if txt_elem.text:
+                        service_data['txt_records'].append(txt_elem.text)
+
+        # Convert TXT records list to string for storage
+        if service_data['txt_records']:
+            service_data['txt_records'] = '; '.join(service_data['txt_records'])
+        else:
+            service_data['txt_records'] = None
+
+        # Only add service if we have at least a service type
+        if service_data['service_type'] or service_data['service_name']:
+            services.append(service_data)
+
+    if not services:
+        return None
+
+    logger.debug("Parsed {} mDNS service(s)".format(len(services)))
+    return services
+
+
 def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
     """Parse nmap XML output and extract relevant information
 
@@ -147,6 +346,12 @@ def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
                 'service_extrainfo': service_extrainfo
             })
 
+    # Get NetBIOS/SMB information from NSE scripts
+    netbios_data = _parse_netbios_scripts(host)
+
+    # Get mDNS/Bonjour service information from NSE scripts
+    mdns_services = _parse_mdns_scripts(host)
+
     scan_data = {
         'ip_address': ip_address,
         'scan_start': scan_start,
@@ -160,10 +365,14 @@ def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
         'os_name': os_name,
         'os_accuracy': os_accuracy,
         'uptime_seconds': uptime_seconds,
-        'ports': ports
+        'ports': ports,
+        'netbios': netbios_data,
+        'mdns_services': mdns_services
     }
 
-    logger.debug("Parsed nmap scan for {} with {} ports".format(
-        ip_address, len(ports)))
+    logger.debug("Parsed nmap scan for {} with {} ports{}{}".format(
+        ip_address, len(ports),
+        " and NetBIOS data" if netbios_data else "",
+        " and {} mDNS service(s)".format(len(mdns_services)) if mdns_services else ""))
 
     return scan_data
