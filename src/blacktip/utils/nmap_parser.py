@@ -124,6 +124,86 @@ def _parse_netbios_scripts(host) -> Optional[Dict]:
     return netbios_data
 
 
+def _parse_mdns_scripts(host) -> Optional[List[Dict]]:
+    """Parse mDNS/Bonjour DNS-SD NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of service dictionaries, or None if no services found
+    """
+    services = []
+
+    # Look for hostscript (host-level scripts)
+    hostscript = host.find('hostscript')
+    if hostscript is None:
+        return None
+
+    # Parse dns-service-discovery script
+    dns_sd_script = None
+    for script in hostscript.findall('script'):
+        if script.get('id') == 'dns-service-discovery':
+            dns_sd_script = script
+            break
+
+    if dns_sd_script is None:
+        return None
+
+    # Parse service tables - each service is in its own table
+    for service_table in dns_sd_script.findall('table'):
+        service_data = {
+            'service_name': None,
+            'service_type': None,
+            'port': None,
+            'target': None,
+            'txt_records': []
+        }
+
+        # Get service instance name (if available)
+        service_name = service_table.get('key')
+        if service_name:
+            service_data['service_name'] = service_name
+
+        # Parse service details
+        for elem in service_table.findall('elem'):
+            key = elem.get('key')
+            value = elem.text
+
+            if key == 'service':
+                service_data['service_type'] = value
+            elif key == 'port':
+                try:
+                    service_data['port'] = int(value)
+                except (ValueError, TypeError):
+                    pass
+            elif key == 'target':
+                service_data['target'] = value
+
+        # Parse TXT records table
+        for txt_table in service_table.findall('table'):
+            if txt_table.get('key') == 'txt':
+                for txt_elem in txt_table.findall('elem'):
+                    if txt_elem.text:
+                        service_data['txt_records'].append(txt_elem.text)
+
+        # Convert TXT records list to string for storage
+        if service_data['txt_records']:
+            service_data['txt_records'] = '; '.join(service_data['txt_records'])
+        else:
+            service_data['txt_records'] = None
+
+        # Only add service if we have at least a service type
+        if service_data['service_type'] or service_data['service_name']:
+            services.append(service_data)
+
+    if not services:
+        return None
+
+    logger.debug("Parsed {} mDNS service(s)".format(len(services)))
+    return services
+
+
 def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
     """Parse nmap XML output and extract relevant information
 
@@ -269,6 +349,9 @@ def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
     # Get NetBIOS/SMB information from NSE scripts
     netbios_data = _parse_netbios_scripts(host)
 
+    # Get mDNS/Bonjour service information from NSE scripts
+    mdns_services = _parse_mdns_scripts(host)
+
     scan_data = {
         'ip_address': ip_address,
         'scan_start': scan_start,
@@ -283,11 +366,13 @@ def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
         'os_accuracy': os_accuracy,
         'uptime_seconds': uptime_seconds,
         'ports': ports,
-        'netbios': netbios_data
+        'netbios': netbios_data,
+        'mdns_services': mdns_services
     }
 
-    logger.debug("Parsed nmap scan for {} with {} ports{}".format(
+    logger.debug("Parsed nmap scan for {} with {} ports{}{}".format(
         ip_address, len(ports),
-        " and NetBIOS data" if netbios_data else ""))
+        " and NetBIOS data" if netbios_data else "",
+        " and {} mDNS service(s)".format(len(mdns_services)) if mdns_services else ""))
 
     return scan_data
