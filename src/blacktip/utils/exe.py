@@ -8,11 +8,20 @@ import psutil
 from blacktip import __exec_max_runtime__ as EXEC_MAX_RUNTIME
 from .utils import timestamp
 from . import logger
+from .nmap_parser import parse_nmap_xml
 
 
 class BlacktipExec:
 
     subprocess_list = []
+
+    def __init__(self, db=None):
+        """Initialize BlacktipExec
+
+        Args:
+            db: BlacktipDatabase instance for storing nmap results (optional)
+        """
+        self.db = db
 
     def async_command_exec_thread(self, exec_command, packet_data, as_user=None):
         if exec_command is None:
@@ -44,21 +53,42 @@ class BlacktipExec:
 
         while len(self.subprocess_list) > 0 and wait_elapsed < wait_max:
             for i in range(len(self.subprocess_list) - 1, -1, -1):  # Iterate backwards for safe removal
-                sp = self.subprocess_list[i]
+                sp_data = self.subprocess_list[i]
+                sp = sp_data['process']
+                is_nmap = sp_data['is_nmap']
+
                 if sp.poll() is not None:
-                    if sp.returncode > 0:
+                    # Process has completed
+                    if sp.returncode == 0 and is_nmap and self.db is not None:
+                        # Successfully completed nmap scan - parse and store results
+                        try:
+                            stdout, stderr = sp.communicate(timeout=1)
+                            if stdout:
+                                xml_content = stdout.decode('utf-8', errors='ignore')
+                                scan_data = parse_nmap_xml(xml_content)
+                                if scan_data:
+                                    self.db.insert_nmap_scan(scan_data)
+                                    logger.info("Nmap scan saved to database for {}".format(
+                                        scan_data.get('ip_address')))
+                                else:
+                                    logger.warning("Failed to parse nmap XML output")
+                        except Exception as e:
+                            logger.error("Failed to process nmap output: {}".format(e))
+                    elif sp.returncode > 0:
                         stdout, stderr = sp.communicate(timeout=1) if sp.stdout else (None, None)
                         if stderr:
                             logger.warning("exec thread returned error: {}".format(stderr.decode('utf-8', errors='ignore')[:200]))
                         else:
                             logger.warning("exec thread returned with non-zero returncode: {}".format(sp.returncode))
+
                     self.subprocess_list.pop(i)
             time.sleep(0.10)  # 100ms
             wait_elapsed = time.time() - wait_start
-        
+
         # Clean up any remaining processes
         for i in range(len(self.subprocess_list) - 1, -1, -1):
-            sp = self.subprocess_list[i]
+            sp_data = self.subprocess_list[i]
+            sp = sp_data['process']
             if sp.poll() is None:
                 self.terminate_process(sp.pid)
                 self.subprocess_list.pop(i)
@@ -66,6 +96,9 @@ class BlacktipExec:
 
     def command_exec(self, command_line):
         logger.debug('Blacktip.command_exec(command_line="{}")'.format(command_line))
+
+        # Check if this is an nmap command
+        is_nmap = 'nmap' in command_line.lower() and '-oX' in command_line
 
         try:
             # Parse command securely - don't use shell=True to prevent injection
@@ -91,8 +124,12 @@ class BlacktipExec:
                 except ValueError as e:
                     logger.error('Failed to parse command: {}'.format(e))
                     return
-            
-            self.subprocess_list.append(process)
+
+            # Store process with metadata
+            self.subprocess_list.append({
+                'process': process,
+                'is_nmap': is_nmap
+            })
             logger.debug('Started subprocess with PID: {}'.format(process.pid))
         except Exception as e:
             logger.error('Failed to execute command: {}'.format(e))

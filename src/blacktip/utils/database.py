@@ -91,6 +91,42 @@ class BlacktipDatabase:
                     timestamp TEXT NOT NULL
                 )
             """)
+
+            # Nmap scans table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_scans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ip_address TEXT NOT NULL,
+                    scan_start TEXT NOT NULL,
+                    scan_end TEXT,
+                    nmap_version TEXT,
+                    nmap_args TEXT,
+                    status TEXT,
+                    hostname TEXT,
+                    mac_address TEXT,
+                    mac_vendor TEXT,
+                    os_name TEXT,
+                    os_accuracy INTEGER,
+                    uptime_seconds INTEGER,
+                    FOREIGN KEY (ip_address) REFERENCES devices(ip_address)
+                )
+            """)
+
+            # Nmap ports table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_ports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    port INTEGER NOT NULL,
+                    protocol TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    service_name TEXT,
+                    service_product TEXT,
+                    service_version TEXT,
+                    service_extrainfo TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
             
             # Create indexes for performance
             cursor.execute("""
@@ -119,8 +155,23 @@ class BlacktipDatabase:
             """)
             
             cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_anomalies_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_anomalies_timestamp
                 ON anomalies(timestamp)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_scans_ip
+                ON nmap_scans(ip_address)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_scans_start
+                ON nmap_scans(scan_start)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_ports_scan_id
+                ON nmap_ports(scan_id)
             """)
             
             # Initialize metadata if not exists
@@ -487,3 +538,130 @@ class BlacktipDatabase:
         
         logger.debug("Export complete: {} IPs, {} MACs".format(
             len(unique_ips), len(unique_macs)))
+
+    def insert_nmap_scan(self, scan_data: Dict) -> int:
+        """Insert nmap scan results into database
+
+        Args:
+            scan_data: Dictionary containing nmap scan results with keys:
+                - ip_address: Target IP address
+                - scan_start: Scan start timestamp
+                - scan_end: Scan end timestamp
+                - nmap_version: Nmap version string
+                - nmap_args: Nmap command arguments
+                - status: Host status (up/down)
+                - hostname: Detected hostname (optional)
+                - mac_address: MAC address (optional)
+                - mac_vendor: MAC vendor (optional)
+                - os_name: OS name (optional)
+                - os_accuracy: OS detection accuracy (optional)
+                - uptime_seconds: Host uptime in seconds (optional)
+                - ports: List of port dictionaries (optional)
+
+        Returns:
+            scan_id: The ID of the inserted scan record
+        """
+        logger.debug("Inserting nmap scan for {}".format(scan_data.get('ip_address')))
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Insert scan record
+            cursor.execute("""
+                INSERT INTO nmap_scans
+                (ip_address, scan_start, scan_end, nmap_version, nmap_args,
+                 status, hostname, mac_address, mac_vendor, os_name,
+                 os_accuracy, uptime_seconds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                scan_data.get('ip_address'),
+                scan_data.get('scan_start'),
+                scan_data.get('scan_end'),
+                scan_data.get('nmap_version'),
+                scan_data.get('nmap_args'),
+                scan_data.get('status'),
+                scan_data.get('hostname'),
+                scan_data.get('mac_address'),
+                scan_data.get('mac_vendor'),
+                scan_data.get('os_name'),
+                scan_data.get('os_accuracy'),
+                scan_data.get('uptime_seconds')
+            ))
+
+            scan_id = cursor.lastrowid
+
+            # Insert port records if any
+            ports = scan_data.get('ports', [])
+            for port in ports:
+                cursor.execute("""
+                    INSERT INTO nmap_ports
+                    (scan_id, port, protocol, state, service_name,
+                     service_product, service_version, service_extrainfo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    port.get('port'),
+                    port.get('protocol'),
+                    port.get('state'),
+                    port.get('service_name'),
+                    port.get('service_product'),
+                    port.get('service_version'),
+                    port.get('service_extrainfo')
+                ))
+
+            logger.debug("Nmap scan inserted with ID {} ({} ports)".format(
+                scan_id, len(ports)))
+
+            return scan_id
+
+    def get_nmap_scans(self, ip_address: Optional[str] = None,
+                      limit: Optional[int] = None) -> List[Dict]:
+        """Get nmap scan results
+
+        Args:
+            ip_address: Filter by IP address (optional)
+            limit: Maximum number of scans to return (optional)
+
+        Returns:
+            List of scan dictionaries with port information
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            if ip_address:
+                query = """
+                    SELECT * FROM nmap_scans
+                    WHERE ip_address = ?
+                    ORDER BY scan_start DESC
+                """
+                if limit:
+                    query += " LIMIT ?"
+                    cursor.execute(query, (ip_address, limit))
+                else:
+                    cursor.execute(query, (ip_address,))
+            else:
+                query = """
+                    SELECT * FROM nmap_scans
+                    ORDER BY scan_start DESC
+                """
+                if limit:
+                    query += " LIMIT ?"
+                    cursor.execute(query, (limit,))
+                else:
+                    cursor.execute(query)
+
+            scans = []
+            for row in cursor.fetchall():
+                scan = dict(row)
+
+                # Get ports for this scan
+                cursor.execute("""
+                    SELECT * FROM nmap_ports
+                    WHERE scan_id = ?
+                    ORDER BY port
+                """, (scan['id'],))
+
+                scan['ports'] = [dict(port_row) for port_row in cursor.fetchall()]
+                scans.append(scan)
+
+            return scans
