@@ -1,12 +1,15 @@
 import sqlite3
 import json
+import logging
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Tuple
 import os
 
 from blacktip import __version__ as VERSION
 from .utils import timestamp
-from . import logger
+
+# Use logging module directly to avoid initialization issues
+_logger = logging.getLogger(__name__)
 
 
 class BlacktipDatabase:
@@ -31,14 +34,14 @@ class BlacktipDatabase:
             conn.commit()
         except Exception as e:
             conn.rollback()
-            logger.error("Database error: {}".format(e))
+            _logger.error("Database error: {}".format(e))
             raise
         finally:
             conn.close()
     
     def _init_database(self):
         """Initialize database schema"""
-        logger.debug("Initializing database: {}".format(self.db_path))
+        _logger.debug("Initializing database: {}".format(self.db_path))
         
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -191,7 +194,7 @@ class BlacktipDatabase:
             """, (timestamp(), timestamp()))
             
             conn.commit()
-            logger.debug("Database initialized successfully")
+            _logger.debug("Database initialized successfully")
     
     def increment_starts(self):
         """Increment the starts counter"""
@@ -472,7 +475,7 @@ class BlacktipDatabase:
         Args:
             filename: Output JSON file path
         """
-        logger.debug("Exporting database to JSON: {}".format(filename))
+        _logger.debug("Exporting database to JSON: {}".format(filename))
         
         devices = self.get_all_devices()
         metadata = self.get_metadata()
@@ -536,7 +539,7 @@ class BlacktipDatabase:
         with open(filename, 'w') as f:
             json.dump(data, f, indent=2, sort_keys=True)
         
-        logger.debug("Export complete: {} IPs, {} MACs".format(
+        _logger.debug("Export complete: {} IPs, {} MACs".format(
             len(unique_ips), len(unique_macs)))
 
     def insert_nmap_scan(self, scan_data: Dict) -> int:
@@ -561,7 +564,7 @@ class BlacktipDatabase:
         Returns:
             scan_id: The ID of the inserted scan record
         """
-        logger.debug("Inserting nmap scan for {}".format(scan_data.get('ip_address')))
+        _logger.debug("Inserting nmap scan for {}".format(scan_data.get('ip_address')))
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -609,7 +612,7 @@ class BlacktipDatabase:
                     port.get('service_extrainfo')
                 ))
 
-            logger.debug("Nmap scan inserted with ID {} ({} ports)".format(
+            _logger.debug("Nmap scan inserted with ID {} ({} ports)".format(
                 scan_id, len(ports)))
 
             return scan_id
@@ -665,3 +668,22 @@ class BlacktipDatabase:
                 scans.append(scan)
 
             return scans
+
+    def get_nmap_ports(self, scan_id: int) -> List[Dict]:
+        """Get ports for a specific nmap scan
+
+        Args:
+            scan_id: The scan ID to get ports for
+
+        Returns:
+            List of port dictionaries
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM nmap_ports
+                WHERE scan_id = ?
+                ORDER BY port
+            """, (scan_id,))
+
+            return [dict(row) for row in cursor.fetchall()]
