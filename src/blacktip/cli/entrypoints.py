@@ -38,8 +38,8 @@ def blacktip():
         required=False,
         type=str,
         metavar="<datafile>",
-        help="The blacktip datafile where ARP event data is stored as a JSON formatted file (REQUIRED).  The datafile "
-        "is also easy to manually query and inspect with external tools such as `jq`",
+        help="The blacktip datafile where ARP event data is stored. Can be a SQLite database (.db) or "
+        "legacy JSON file (.json). SQLite is recommended for better performance and web frontend support.",
     )
     parser_group0.add_argument(
         "-i",
@@ -169,6 +169,13 @@ def blacktip():
         help="Query the <datafile> for an IPv4 or HW address and return results in JSON formatted output and exit.",
     )
     parser_group4.add_argument(
+        "--export-json",
+        required=False,
+        type=str,
+        metavar="<output.json>",
+        help="Export the database to JSON format for backup or legacy compatibility.",
+    )
+    parser_group4.add_argument(
         "-v",
         "--version",
         required=False,
@@ -225,6 +232,8 @@ def blacktip():
         blacktip = Blacktip(logger_level=logger_level)
         if args.version:
             out(blacktip.do_version())
+        elif args.export_json and args.datafile:
+            blacktip.do_export_json(datafile=args.datafile, output_file=args.export_json)
         elif args.query and args.datafile:
             out(blacktip.do_query(datafile=args.datafile, query=args.query))
         elif args.datafile:

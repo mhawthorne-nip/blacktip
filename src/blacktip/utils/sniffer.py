@@ -45,6 +45,64 @@ class BlacktipSniffer:
         self._oui_cache[hw_address] = vendor
         return vendor
     
+    def process_packet(self, packet, db):
+        """Process a packet and update database
+        
+        Args:
+            packet: Parsed ARP packet dictionary
+            db: BlacktipDatabase instance
+            
+        Returns:
+            packet_data dictionary or None if invalid
+        """
+        hw_address = packet["src"]["hw"]
+        ip_address = packet["src"]["ip"]
+        
+        if not hw_address or not ip_address:
+            logging.warning("Invalid packet: hw={} ip={}".format(hw_address, ip_address))
+            return None
+
+        # Lookup hardware vendor
+        hw_vendor = self.get_hw_vendor(hw_address)
+        
+        # Detect gratuitous ARP
+        is_gratuitous = (packet["src"]["ip"] == packet["dst"]["ip"])
+        
+        # Check for IP/MAC conflicts
+        anomalies = []
+        previous_mac = db.check_ip_conflict(ip_address, hw_address)
+        if previous_mac:
+            anomaly_msg = "IP {} previously seen with MAC {}, now with {}".format(
+                ip_address, previous_mac, hw_address
+            )
+            anomalies.append({
+                "type": "ip_mac_conflict",
+                "message": anomaly_msg,
+                "ts": timestamp()
+            })
+            logging.warning("Potential ARP spoofing: {}".format(anomaly_msg))
+            db.log_anomaly("ip_mac_conflict", anomaly_msg, ip_address, hw_address)
+        
+        # Update database and get new status
+        device_id, is_new_ip, is_new_hw = db.upsert_device(
+            ip_address, hw_address, hw_vendor, packet["op"], 
+            is_new_ip=False, is_new_mac=False
+        )
+        
+        # Optionally log the event (can be disabled for performance)
+        # db.log_event(device_id, packet["op"], is_gratuitous)
+        
+        packet_data = {
+            "op": packet["op"],
+            "ip": {"addr": ip_address, "new": is_new_ip},
+            "hw": {"addr": hw_address, "new": is_new_hw, "vendor": hw_vendor},
+            "gratuitous": is_gratuitous,
+            "anomalies": anomalies if anomalies else None,
+            "ts": packet.get("ts", timestamp())
+        }
+
+        return packet_data
+    
     def sniff_arp_packet_batch(self, interface=None):
 
         packets = []

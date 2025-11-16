@@ -6,7 +6,7 @@ from blacktip import __save_data_interval__default__ as SAVE_DATA_INTERVAL_DEFAU
 from blacktip.utils.utils import out
 from blacktip.utils.utils import timestamp
 from blacktip.utils import logger
-from blacktip.utils.datafile import BlacktipDataFile
+from blacktip.utils.database import BlacktipDatabase
 from blacktip.utils.sniffer import BlacktipSniffer
 from blacktip.utils.exe import BlacktipExec
 from blacktip.utils.metrics import get_metrics
@@ -21,20 +21,19 @@ class Blacktip:
     def do_version(self):
         logger.debug("do_version()")
         return {"version": VERSION}
+    
+    def do_export_json(self, datafile, output_file):
+        logger.debug("do_export_json()")
+        db = BlacktipDatabase(datafile)
+        db.export_to_json(output_file)
+        logger.info("Database exported to {}".format(output_file))
+        print("Database exported to: {}".format(output_file))
 
     def do_query(self, datafile, query):
         logger.debug("do_query()")
 
-        data = BlacktipDataFile().read(filename=datafile)
-        address = query.replace("-", ":").lower()
-
-        if len(address.split(":")) == 6:
-            if address in data["hw"]:
-                return {"hw": {address: data["hw"][address]}}
-        else:
-            if address in data["ip"].keys():
-                return {"ip": {address: data["ip"][address]}}
-        return {}
+        db = BlacktipDatabase(datafile)
+        return db.query_by_address(query)
 
     def do_sniffer(
         self,
@@ -57,10 +56,11 @@ class Blacktip:
             )
         )
 
-        session = BlacktipDataFile.read(filename=datafile)
-        session["meta"]["starts"] += 1
+        db = BlacktipDatabase(datafile)
+        db.increment_starts()
         session_save_time = time.time()
-        session_data_count = session["meta"]["hw_count"] + session["meta"]["ip_count"]
+        last_stats = db.get_statistics()
+        session_data_count = last_stats["unique_ip_addresses"] + last_stats["unique_mac_addresses"]
         
         # Metrics tracking
         metrics = get_metrics() if enable_metrics else None
@@ -86,8 +86,7 @@ class Blacktip:
                 logger.critical("{} requires root privileges to sniff network interfaces!".format(NAME))
                 exit(1)
             except KeyboardInterrupt:
-                logger.info("Received keyboard interrupt, saving data and exiting...")
-                BlacktipDataFile.write(filename=datafile, data=session)
+                logger.info("Received keyboard interrupt, exiting...")
                 if metrics:
                     metrics.log_stats()
                 raise
@@ -104,12 +103,13 @@ class Blacktip:
 
             for packet in batch_packets:
                 try:
-                    result = arp_sniffer.expand_packet_session_data(packet, session)
-                    if result[0] is None:
+                    result = arp_sniffer.process_packet(packet, db)
+                    if result is None:
                         if metrics:
                             metrics.increment("packets_invalid")
                         continue
-                    packet_data, session = result
+                    
+                    packet_data = result
                     packets_processed += 1
 
                     # Track packet types
@@ -172,33 +172,32 @@ class Blacktip:
 
             del blacktipexec
 
-            session["meta"]["ts_last"] = timestamp()
-            session["meta"]["hw_count"] = len(session["hw"])
-            session["meta"]["ip_count"] = len(session["ip"])
-            
-            if metrics:
-                metrics.set_gauge("unique_hw_addresses", session["meta"]["hw_count"])
-                metrics.set_gauge("unique_ip_addresses", session["meta"]["ip_count"])
-                metrics.set_gauge("session_starts", session["meta"]["starts"])
-
-            if time.time() > session_save_time + save_interval and (
-                session_data_count != session["meta"]["hw_count"] + session["meta"]["ip_count"]
-            ):
+            # Update statistics periodically
+            if time.time() > session_save_time + save_interval:
                 try:
-                    save_start = time.time()
-                    BlacktipDataFile.write(filename=datafile, data=session)
+                    stats = db.get_statistics()
+                    current_data_count = stats["unique_ip_addresses"] + stats["unique_mac_addresses"]
+                    
+                    if current_data_count != session_data_count:
+                        db.update_metadata("ts_last", timestamp())
+                        session_data_count = current_data_count
+                        logger.debug("Database updated: {} IPs, {} MACs".format(
+                            stats["unique_ip_addresses"], stats["unique_mac_addresses"]))
+                    
                     session_save_time = time.time()
-                    session_data_count = session["meta"]["hw_count"] + session["meta"]["ip_count"]
                     
                     if metrics:
-                        metrics.record_time("datafile_write_duration", time.time() - save_start)
-                        metrics.increment("datafile_writes")
+                        metrics.increment("database_updates")
+                        metrics.set_gauge("unique_hw_addresses", stats["unique_mac_addresses"])
+                        metrics.set_gauge("unique_ip_addresses", stats["unique_ip_addresses"])
+                        
                 except Exception as e:
-                    logger.error("Failed to write datafile: {}".format(e))
+                    logger.error("Failed to update statistics: {}".format(e))
                     if metrics:
-                        metrics.increment("datafile_write_errors")
+                        metrics.increment("database_update_errors")
             
             # Log metrics periodically
             if metrics and enable_metrics and (time.time() - last_metrics_log) > metrics_interval:
                 metrics.log_stats()
                 last_metrics_log = time.time()
+
