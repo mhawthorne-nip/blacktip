@@ -204,6 +204,432 @@ def _parse_mdns_scripts(host) -> Optional[List[Dict]]:
     return services
 
 
+def _parse_http_scripts(host) -> Optional[List[Dict]]:
+    """Parse HTTP-related NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of HTTP data dictionaries (one per port), or None if no data found
+    """
+    http_data = []
+
+    # Look for port-level scripts
+    ports_elem = host.find('ports')
+    if ports_elem is None:
+        return None
+
+    for port_elem in ports_elem.findall('port'):
+        port_num = port_elem.get('portid')
+        try:
+            port_num = int(port_num)
+        except (ValueError, TypeError):
+            continue
+
+        port_http_data = {
+            'port': port_num,
+            'title': None,
+            'server': None,
+            'status': None,
+            'redirect_url': None,
+            'robots_txt': None,
+            'methods': None,
+            'favicon_hash': None
+        }
+
+        has_http_data = False
+
+        # Check for HTTP scripts on this port
+        for script in port_elem.findall('script'):
+            script_id = script.get('id')
+
+            if script_id == 'http-title':
+                port_http_data['title'] = script.get('output', '').strip()
+                has_http_data = True
+
+            elif script_id == 'http-server-header':
+                port_http_data['server'] = script.get('output', '').strip()
+                has_http_data = True
+
+            elif script_id == 'http-methods':
+                # Extract allowed methods
+                methods = []
+                for elem in script.findall('elem'):
+                    if elem.text:
+                        methods.append(elem.text.strip())
+                if methods:
+                    port_http_data['methods'] = ', '.join(methods)
+                    has_http_data = True
+
+            elif script_id == 'http-robots-txt':
+                port_http_data['robots_txt'] = script.get('output', '').strip()[:500]  # Limit size
+                has_http_data = True
+
+            elif script_id == 'http-favicon':
+                # Look for hash value
+                for elem in script.findall('elem'):
+                    if elem.get('key') == 'hash':
+                        port_http_data['favicon_hash'] = elem.text
+                        has_http_data = True
+                        break
+
+        if has_http_data:
+            http_data.append(port_http_data)
+
+    if not http_data:
+        return None
+
+    logger.debug("Parsed HTTP data for {} port(s)".format(len(http_data)))
+    return http_data
+
+
+def _parse_ssl_scripts(host) -> Optional[List[Dict]]:
+    """Parse SSL/TLS NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of SSL data dictionaries (one per port), or None if no data found
+    """
+    ssl_data = []
+
+    # Look for port-level scripts
+    ports_elem = host.find('ports')
+    if ports_elem is None:
+        return None
+
+    for port_elem in ports_elem.findall('port'):
+        port_num = port_elem.get('portid')
+        try:
+            port_num = int(port_num)
+        except (ValueError, TypeError):
+            continue
+
+        port_ssl_data = {
+            'port': port_num,
+            'subject': None,
+            'issuer': None,
+            'serial': None,
+            'not_before': None,
+            'not_after': None,
+            'sha1_fingerprint': None,
+            'sha256_fingerprint': None,
+            'ciphers': None,
+            'tls_versions': None,
+            'vulnerabilities': None
+        }
+
+        has_ssl_data = False
+
+        # Check for SSL scripts on this port
+        for script in port_elem.findall('script'):
+            script_id = script.get('id')
+
+            if script_id == 'ssl-cert':
+                # Parse certificate information
+                for elem in script.findall('elem'):
+                    key = elem.get('key')
+                    if key == 'subject':
+                        port_ssl_data['subject'] = elem.text
+                        has_ssl_data = True
+                    elif key == 'issuer':
+                        port_ssl_data['issuer'] = elem.text
+                        has_ssl_data = True
+
+                # Look for table with certificate details
+                for table in script.findall('table'):
+                    table_key = table.get('key')
+                    if table_key == 'validity':
+                        for elem in table.findall('elem'):
+                            if elem.get('key') == 'notBefore':
+                                port_ssl_data['not_before'] = elem.text
+                            elif elem.get('key') == 'notAfter':
+                                port_ssl_data['not_after'] = elem.text
+                    elif table_key == 'pubkey':
+                        for elem in table.findall('elem'):
+                            if elem.get('key') == 'bits':
+                                # Can store additional info if needed
+                                pass
+
+            elif script_id == 'ssl-enum-ciphers':
+                # Parse cipher suites and TLS versions
+                tls_versions = []
+                ciphers = []
+                vulns = []
+
+                for table in script.findall('table'):
+                    # TLS version tables (e.g., TLSv1.2, TLSv1.3)
+                    tls_version = table.get('key')
+                    if tls_version and 'TLS' in tls_version.upper():
+                        tls_versions.append(tls_version)
+
+                        # Get ciphers for this version
+                        for cipher_table in table.findall('table'):
+                            if cipher_table.get('key') == 'ciphers':
+                                for cipher in cipher_table.findall('table'):
+                                    for elem in cipher.findall('elem'):
+                                        if elem.get('key') == 'name' and elem.text:
+                                            ciphers.append(elem.text)
+
+                    # Check for warnings/vulnerabilities
+                    if table.get('key') == 'warnings':
+                        for elem in table.findall('elem'):
+                            if elem.text:
+                                vulns.append(elem.text)
+
+                if tls_versions:
+                    port_ssl_data['tls_versions'] = ', '.join(tls_versions)
+                    has_ssl_data = True
+                if ciphers:
+                    # Store up to 10 ciphers to avoid huge strings
+                    port_ssl_data['ciphers'] = ', '.join(ciphers[:10])
+                    has_ssl_data = True
+                if vulns:
+                    port_ssl_data['vulnerabilities'] = '; '.join(vulns)
+                    has_ssl_data = True
+
+        if has_ssl_data:
+            ssl_data.append(port_ssl_data)
+
+    if not ssl_data:
+        return None
+
+    logger.debug("Parsed SSL data for {} port(s)".format(len(ssl_data)))
+    return ssl_data
+
+
+def _parse_ssh_scripts(host) -> Optional[List[Dict]]:
+    """Parse SSH NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of SSH data dictionaries (one per port), or None if no data found
+    """
+    ssh_data = []
+
+    # Look for port-level scripts
+    ports_elem = host.find('ports')
+    if ports_elem is None:
+        return None
+
+    for port_elem in ports_elem.findall('port'):
+        port_num = port_elem.get('portid')
+        try:
+            port_num = int(port_num)
+        except (ValueError, TypeError):
+            continue
+
+        port_ssh_data = {
+            'port': port_num,
+            'protocol_version': None,
+            'hostkey_type': None,
+            'hostkey_fingerprint': None,
+            'hostkey_bits': None,
+            'algorithms': None
+        }
+
+        has_ssh_data = False
+
+        # Check for SSH scripts on this port
+        for script in port_elem.findall('script'):
+            script_id = script.get('id')
+
+            if script_id == 'ssh-hostkey':
+                # Parse host key information
+                hostkeys = []
+                for table in script.findall('table'):
+                    key_type = None
+                    key_fingerprint = None
+                    key_bits = None
+
+                    for elem in table.findall('elem'):
+                        key = elem.get('key')
+                        if key == 'type':
+                            key_type = elem.text
+                        elif key == 'fingerprint':
+                            key_fingerprint = elem.text
+                        elif key == 'bits':
+                            try:
+                                key_bits = int(elem.text)
+                            except (ValueError, TypeError):
+                                pass
+
+                    if key_type and key_fingerprint:
+                        hostkeys.append("{}:{} ({} bits)".format(
+                            key_type, key_fingerprint, key_bits if key_bits else 'unknown'))
+
+                        # Use first key for main fields
+                        if not port_ssh_data['hostkey_type']:
+                            port_ssh_data['hostkey_type'] = key_type
+                            port_ssh_data['hostkey_fingerprint'] = key_fingerprint
+                            port_ssh_data['hostkey_bits'] = key_bits
+                            has_ssh_data = True
+
+            elif script_id == 'ssh2-enum-algos':
+                # Parse supported algorithms
+                algos = []
+                for table in script.findall('table'):
+                    algo_type = table.get('key')
+                    algo_list = []
+                    for elem in table.findall('elem'):
+                        if elem.text:
+                            algo_list.append(elem.text)
+                    if algo_list and algo_type:
+                        algos.append("{}: {}".format(algo_type, ', '.join(algo_list[:3])))  # Limit to 3
+
+                if algos:
+                    port_ssh_data['algorithms'] = '; '.join(algos)
+                    has_ssh_data = True
+
+        if has_ssh_data:
+            ssh_data.append(port_ssh_data)
+
+    if not ssh_data:
+        return None
+
+    logger.debug("Parsed SSH data for {} port(s)".format(len(ssh_data)))
+    return ssh_data
+
+
+def _parse_vulnerability_scripts(host) -> Optional[List[Dict]]:
+    """Parse vulnerability NSE script output from host element
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of vulnerability dictionaries, or None if no vulnerabilities found
+    """
+    vulns = []
+
+    # Check both port-level and host-level scripts
+    script_locations = []
+
+    ports_elem = host.find('ports')
+    if ports_elem is not None:
+        for port_elem in ports_elem.findall('port'):
+            port_num = port_elem.get('portid')
+            try:
+                port_num = int(port_num)
+            except (ValueError, TypeError):
+                continue
+            script_locations.append(('port', port_num, port_elem))
+
+    hostscript = host.find('hostscript')
+    if hostscript is not None:
+        script_locations.append(('host', None, hostscript))
+
+    for location_type, port_num, elem in script_locations:
+        for script in elem.findall('script'):
+            script_id = script.get('id')
+
+            if script_id == 'vulners':
+                # Parse vulners script output
+                for table in script.findall('table'):
+                    vuln_data = {
+                        'port': port_num,
+                        'vuln_id': None,
+                        'title': None,
+                        'description': None,
+                        'state': 'VULNERABLE',
+                        'risk': None,
+                        'cvss_score': None,
+                        'cve_id': None,
+                        'exploit_available': 0
+                    }
+
+                    for elem_item in table.findall('elem'):
+                        key = elem_item.get('key')
+                        value = elem_item.text
+
+                        if key == 'id':
+                            vuln_data['vuln_id'] = value
+                            # Extract CVE if present
+                            if value and value.startswith('CVE-'):
+                                vuln_data['cve_id'] = value
+                        elif key == 'title':
+                            vuln_data['title'] = value
+                        elif key == 'cvss':
+                            try:
+                                vuln_data['cvss_score'] = float(value)
+                            except (ValueError, TypeError):
+                                pass
+
+                    if vuln_data['vuln_id']:
+                        vulns.append(vuln_data)
+
+    if not vulns:
+        return None
+
+    logger.debug("Parsed {} vulnerability(ies)".format(len(vulns)))
+    return vulns
+
+
+def _parse_generic_scripts(host) -> Optional[List[Dict]]:
+    """Parse any other NSE scripts not handled by specific parsers
+
+    Args:
+        host: XML host element containing script results
+
+    Returns:
+        List of script output dictionaries, or None if none found
+    """
+    # Scripts handled by specific parsers (skip these)
+    handled_scripts = {
+        'nbstat', 'smb-os-discovery', 'smb-protocols', 'smb-security-mode',
+        'dns-service-discovery', 'http-title', 'http-server-header',
+        'http-methods', 'http-robots-txt', 'http-favicon', 'ssl-cert',
+        'ssl-enum-ciphers', 'ssh-hostkey', 'ssh2-enum-algos', 'vulners'
+    }
+
+    generic_scripts = []
+
+    # Check port-level scripts
+    ports_elem = host.find('ports')
+    if ports_elem is not None:
+        for port_elem in ports_elem.findall('port'):
+            port_num = port_elem.get('portid')
+            try:
+                port_num = int(port_num)
+            except (ValueError, TypeError):
+                continue
+
+            for script in port_elem.findall('script'):
+                script_id = script.get('id')
+                if script_id not in handled_scripts:
+                    output = script.get('output', '')
+                    if output:
+                        generic_scripts.append({
+                            'port': port_num,
+                            'script_id': script_id,
+                            'output': output[:1000]  # Limit output size
+                        })
+
+    # Check host-level scripts
+    hostscript = host.find('hostscript')
+    if hostscript is not None:
+        for script in hostscript.findall('script'):
+            script_id = script.get('id')
+            if script_id not in handled_scripts:
+                output = script.get('output', '')
+                if output:
+                    generic_scripts.append({
+                        'port': None,
+                        'script_id': script_id,
+                        'output': output[:1000]  # Limit output size
+                    })
+
+    if not generic_scripts:
+        return None
+
+    logger.debug("Parsed {} generic script output(s)".format(len(generic_scripts)))
+    return generic_scripts
+
+
 def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
     """Parse nmap XML output and extract relevant information
 
@@ -352,6 +778,21 @@ def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
     # Get mDNS/Bonjour service information from NSE scripts
     mdns_services = _parse_mdns_scripts(host)
 
+    # Get HTTP data from NSE scripts
+    http_data = _parse_http_scripts(host)
+
+    # Get SSL/TLS data from NSE scripts
+    ssl_data = _parse_ssl_scripts(host)
+
+    # Get SSH data from NSE scripts
+    ssh_data = _parse_ssh_scripts(host)
+
+    # Get vulnerability data from NSE scripts
+    vuln_data = _parse_vulnerability_scripts(host)
+
+    # Get generic script outputs
+    generic_scripts = _parse_generic_scripts(host)
+
     scan_data = {
         'ip_address': ip_address,
         'scan_start': scan_start,
@@ -367,12 +808,22 @@ def parse_nmap_xml(xml_content: str) -> Optional[Dict]:
         'uptime_seconds': uptime_seconds,
         'ports': ports,
         'netbios': netbios_data,
-        'mdns_services': mdns_services
+        'mdns_services': mdns_services,
+        'http_data': http_data,
+        'ssl_data': ssl_data,
+        'ssh_data': ssh_data,
+        'vuln_data': vuln_data,
+        'generic_scripts': generic_scripts
     }
 
-    logger.debug("Parsed nmap scan for {} with {} ports{}{}".format(
+    logger.debug("Parsed nmap scan for {} with {} ports{}{}{}{}{}{}{}".format(
         ip_address, len(ports),
         " and NetBIOS data" if netbios_data else "",
-        " and {} mDNS service(s)".format(len(mdns_services)) if mdns_services else ""))
+        " and {} mDNS service(s)".format(len(mdns_services)) if mdns_services else "",
+        " and {} HTTP port(s)".format(len(http_data)) if http_data else "",
+        " and {} SSL port(s)".format(len(ssl_data)) if ssl_data else "",
+        " and {} SSH port(s)".format(len(ssh_data)) if ssh_data else "",
+        " and {} vulnerability(ies)".format(len(vuln_data)) if vuln_data else "",
+        " and {} generic script(s)".format(len(generic_scripts)) if generic_scripts else ""))
 
     return scan_data
