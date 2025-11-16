@@ -272,29 +272,6 @@ class BlacktipDatabase:
                 )
             """)
 
-            # Geolocation and ASN table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS device_geolocation (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ip_address TEXT NOT NULL,
-                    country_code TEXT,
-                    country_name TEXT,
-                    region TEXT,
-                    city TEXT,
-                    latitude REAL,
-                    longitude REAL,
-                    asn INTEGER,
-                    asn_org TEXT,
-                    isp TEXT,
-                    is_proxy INTEGER DEFAULT 0,
-                    is_vpn INTEGER DEFAULT 0,
-                    is_tor INTEGER DEFAULT 0,
-                    threat_score INTEGER DEFAULT 0,
-                    last_updated TEXT NOT NULL,
-                    FOREIGN KEY (ip_address) REFERENCES devices(ip_address)
-                )
-            """)
-
             # Device classification table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS device_classification (
@@ -458,22 +435,6 @@ class BlacktipDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_device_dns_hostname
                 ON device_dns(ptr_hostname)
-            """)
-
-            # Indexes for geolocation
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_device_geo_ip
-                ON device_geolocation(ip_address)
-            """)
-
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_device_geo_country
-                ON device_geolocation(country_code)
-            """)
-
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_device_geo_asn
-                ON device_geolocation(asn)
             """)
 
             # Indexes for classification
@@ -1449,77 +1410,6 @@ class BlacktipDatabase:
                       response_time_ms, ts, ts))
 
         _logger.debug("Updated DNS data for {}".format(ip_address))
-
-    def upsert_geolocation_data(self, ip_address: str, geo_data: Dict):
-        """Insert or update geolocation data for a device
-
-        Args:
-            ip_address: IP address
-            geo_data: Dictionary with geolocation fields
-        """
-        ts = timestamp()
-
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-
-            # Check if record exists
-            cursor.execute("""
-                SELECT id FROM device_geolocation WHERE ip_address = ?
-            """, (ip_address,))
-
-            existing = cursor.fetchone()
-
-            if existing:
-                cursor.execute("""
-                    UPDATE device_geolocation
-                    SET country_code = ?, country_name = ?, region = ?, city = ?,
-                        latitude = ?, longitude = ?, asn = ?, asn_org = ?, isp = ?,
-                        is_proxy = ?, is_vpn = ?, is_tor = ?, threat_score = ?,
-                        last_updated = ?
-                    WHERE ip_address = ?
-                """, (
-                    geo_data.get('country_code'),
-                    geo_data.get('country_name'),
-                    geo_data.get('region'),
-                    geo_data.get('city'),
-                    geo_data.get('latitude'),
-                    geo_data.get('longitude'),
-                    geo_data.get('asn'),
-                    geo_data.get('asn_org'),
-                    geo_data.get('isp'),
-                    geo_data.get('is_proxy', 0),
-                    geo_data.get('is_vpn', 0),
-                    geo_data.get('is_tor', 0),
-                    geo_data.get('threat_score', 0),
-                    ts,
-                    ip_address
-                ))
-            else:
-                cursor.execute("""
-                    INSERT INTO device_geolocation
-                    (ip_address, country_code, country_name, region, city,
-                     latitude, longitude, asn, asn_org, isp,
-                     is_proxy, is_vpn, is_tor, threat_score, last_updated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    ip_address,
-                    geo_data.get('country_code'),
-                    geo_data.get('country_name'),
-                    geo_data.get('region'),
-                    geo_data.get('city'),
-                    geo_data.get('latitude'),
-                    geo_data.get('longitude'),
-                    geo_data.get('asn'),
-                    geo_data.get('asn_org'),
-                    geo_data.get('isp'),
-                    geo_data.get('is_proxy', 0),
-                    geo_data.get('is_vpn', 0),
-                    geo_data.get('is_tor', 0),
-                    geo_data.get('threat_score', 0),
-                    ts
-                ))
-
-        _logger.debug("Updated geolocation data for {}".format(ip_address))
 
     def upsert_classification_data(self, ip_address: str, classification: Dict):
         """Insert or update device classification data

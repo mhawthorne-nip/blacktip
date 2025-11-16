@@ -11,7 +11,6 @@ from . import logger
 from .nmap_parser import parse_nmap_xml
 from .dns_resolver import reverse_dns_lookup
 from .classifier import DeviceClassifier
-from .geo_lookup import GeoLocator
 
 
 class BlacktipExec:
@@ -150,21 +149,6 @@ class BlacktipExec:
                                                 classification['confidence_score']))
                                     except Exception as e:
                                         logger.warning("Device classification failed for {}: {}".format(ip_address, e))
-
-                                    # Perform geolocation lookup (disabled by default - set use_api=True to enable)
-                                    # Note: This requires external API calls and may be rate-limited
-                                    try:
-                                        use_geolocation_api = False  # Change to True to enable
-                                        geo_data = GeoLocator.lookup_ip_geolocation(ip_address, use_api=use_geolocation_api)
-                                        if geo_data:
-                                            self.db.upsert_geolocation_data(ip_address, geo_data)
-                                            if geo_data.get('country_code') != 'LOCAL':
-                                                logger.debug("Geolocation data stored for {}: {}, {}".format(
-                                                    ip_address,
-                                                    geo_data.get('city', 'Unknown'),
-                                                    geo_data.get('country_name', 'Unknown')))
-                                    except Exception as e:
-                                        logger.warning("Geolocation lookup failed for {}: {}".format(ip_address, e))
 
                                 else:
                                     logger.warning("Failed to parse nmap XML output for command: {}".format(command[:100]))
