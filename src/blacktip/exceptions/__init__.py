@@ -1,0 +1,2 @@
+class BlacktipException(Exception):
+    pass
