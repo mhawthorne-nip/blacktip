@@ -54,11 +54,23 @@ class BlacktipWebAPI:
             Dictionary with online status and time ago string
         """
         try:
-            # Parse the timestamp (handle both with and without microseconds)
-            if '.' in last_seen:
+            # Parse the timestamp - handle various formats
+            # Remove 'Z' suffix and parse
+            timestamp_str = last_seen.rstrip('Z')
+
+            # Try parsing with microseconds first
+            try:
+                if '.' in timestamp_str:
+                    last_seen_dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f')
+                else:
+                    last_seen_dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+            except ValueError:
+                # Fallback to fromisoformat (Python 3.7+)
                 last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
-            else:
-                last_seen_dt = datetime.fromisoformat(last_seen + '+00:00')
+
+            # Make timezone-aware (assume UTC if no timezone)
+            if last_seen_dt.tzinfo is None:
+                last_seen_dt = last_seen_dt.replace(tzinfo=timezone.utc)
 
             now = datetime.now(timezone.utc)
             time_diff = now - last_seen_dt
