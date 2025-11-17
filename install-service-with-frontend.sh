@@ -53,19 +53,43 @@ echo ""
 
 # Step 2: Check web frontend dependencies
 echo -e "${YELLOW}[2/8]${NC} Checking web frontend dependencies..."
-if ! python3 -c "import flask" 2>/dev/null; then
-    echo -e "${YELLOW}Warning: Flask not found${NC}"
-    echo "Installing web frontend dependencies..."
-    pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt" --break-system-packages
+
+# Check if all dependencies are available
+FLASK_OK=false
+FLASK_CORS_OK=false
+
+if python3 -c "import flask" 2>/dev/null; then
+    FLASK_OK=true
 fi
 
-if ! python3 -c "import flask_cors" 2>/dev/null; then
-    echo -e "${YELLOW}Warning: flask-cors not found${NC}"
-    echo "Installing web frontend dependencies..."
-    pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt" --break-system-packages
+if python3 -c "import flask_cors" 2>/dev/null; then
+    FLASK_CORS_OK=true
 fi
 
-echo -e "${GREEN}✓${NC} Web frontend dependencies installed"
+if [ "$FLASK_OK" = false ] || [ "$FLASK_CORS_OK" = false ]; then
+    echo -e "${YELLOW}Installing missing web frontend dependencies...${NC}"
+    
+    # Try pip3 with --break-system-packages first
+    if pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt" --break-system-packages 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} Dependencies installed via pip3"
+    # If that fails, try using system package manager
+    elif command -v apt-get &> /dev/null; then
+        echo -e "${YELLOW}Trying system package manager (apt)...${NC}"
+        apt-get update -qq
+        apt-get install -y python3-flask python3-flask-cors
+        echo -e "${GREEN}✓${NC} Dependencies installed via apt"
+    else
+        echo -e "${RED}Error: Could not install dependencies${NC}"
+        echo "Please install manually:"
+        echo "  sudo apt install python3-flask python3-flask-cors"
+        echo "  OR"
+        echo "  pip3 install -r web-frontend/requirements.txt --break-system-packages"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓${NC} All dependencies already installed"
+fi
+
 echo ""
 
 # Step 3: Create installation directory
