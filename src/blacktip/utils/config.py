@@ -24,6 +24,17 @@ class Config:
         "enable_metrics": False,
         "metrics_interval": 300,  # Log metrics every 5 minutes
         "log_level": "info",
+        # Active probing configuration
+        "enable_active_probing": True,  # Enable active ARP/ICMP probing
+        "probe_timeout": 1.0,  # Timeout in seconds per probe attempt
+        "probe_retry_count": 2,  # Number of retries for failed probes
+        "probe_failure_threshold": 2,  # Consecutive failures before marking offline
+        "enable_icmp_fallback": True,  # Fall back to ICMP if ARP fails
+        "probe_before_offline": True,  # Probe device before marking offline
+        "periodic_probe_interval": 5,  # Probe all online devices every N cycles (0 = disabled)
+        # State monitoring configuration
+        "offline_threshold_seconds": 300,  # Mark offline after N seconds (default: 5 minutes)
+        "state_monitor_interval": 60,  # Check interval in seconds
     }
     
     def __init__(self, config_file=None):

@@ -1648,6 +1648,54 @@ class BlacktipDatabase:
 
             if cursor.rowcount == 0:
                 _logger.warning("No device found with MAC {}".format(mac_address))
+            else:
+                _logger.info("Updated device name for MAC {} ({}) to '{}'".format(
+                    mac_address, ip_address, device_name))
+
+    def get_device(self, ip_address: str, mac_address: str) -> Optional[Dict]:
+        """Get a specific device by IP and MAC address
+        
+        Args:
+            ip_address: IP address of the device
+            mac_address: MAC address of the device
+            
+        Returns:
+            Device dictionary or None if not found
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM devices 
+                WHERE ip_address = ? AND mac_address = ?
+            """, (ip_address, mac_address))
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def update_device_last_seen(self, ip_address: str, mac_address: str, timestamp: str):
+        """Update the last_seen timestamp for a device
+        
+        This is used when a device responds to an active probe, allowing us
+        to update its status without an actual ARP packet.
+        
+        Args:
+            ip_address: IP address of the device
+            mac_address: MAC address of the device
+            timestamp: ISO 8601 timestamp string
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE devices
+                SET last_seen = ?
+                WHERE ip_address = ? AND mac_address = ?
+            """, (timestamp, ip_address, mac_address))
+            
+            if cursor.rowcount > 0:
+                _logger.debug("Updated last_seen for {} ({}) to {}".format(
+                    ip_address, mac_address, timestamp))
+            else:
+                _logger.warning("Device not found: {} ({})".format(ip_address, mac_address))
                 raise ValueError("Device not found")
 
             _logger.debug("Updated device name for MAC {} (currently at {}) to '{}' ({} record(s) updated)".format(

@@ -49,6 +49,96 @@ def blacktip_state_monitor():
     )
     
     parser.add_argument(
+        "--interface",
+        required=False,
+        type=str,
+        metavar="<interface>",
+        help="Network interface for active probing (e.g., eth0, wlan0).",
+    )
+    
+    parser.add_argument(
+        "-t",
+        "--offline-threshold",
+        required=False,
+        default=300,
+        type=int,
+        metavar="<seconds>",
+        help="Mark device offline after N seconds of inactivity (DEFAULT: 300 = 5 minutes).",
+    )
+    
+    # Active probing arguments
+    parser.add_argument(
+        "--enable-probing",
+        required=False,
+        default=True,
+        action="store_true",
+        dest="enable_probing",
+        help="Enable active ARP/ICMP probing (DEFAULT).",
+    )
+    
+    parser.add_argument(
+        "--no-probing",
+        required=False,
+        action="store_false",
+        dest="enable_probing",
+        help="Disable active probing - use passive monitoring only.",
+    )
+    
+    parser.add_argument(
+        "--probe-timeout",
+        required=False,
+        default=1.0,
+        type=float,
+        metavar="<seconds>",
+        help="Timeout in seconds per probe attempt (DEFAULT: 1.0).",
+    )
+    
+    parser.add_argument(
+        "--probe-retries",
+        required=False,
+        default=2,
+        type=int,
+        metavar="<count>",
+        help="Number of retries for failed probes (DEFAULT: 2).",
+    )
+    
+    parser.add_argument(
+        "--probe-failure-threshold",
+        required=False,
+        default=2,
+        type=int,
+        metavar="<count>",
+        help="Consecutive probe failures before marking offline (DEFAULT: 2).",
+    )
+    
+    parser.add_argument(
+        "--no-icmp-fallback",
+        required=False,
+        default=True,
+        action="store_false",
+        dest="icmp_fallback",
+        help="Disable ICMP ping fallback when ARP probe fails (DEFAULT: enabled).",
+    )
+    
+    parser.add_argument(
+        "--no-probe-before-offline",
+        required=False,
+        default=True,
+        action="store_false",
+        dest="probe_before_offline",
+        help="Disable probing device before marking offline (DEFAULT: enabled).",
+    )
+    
+    parser.add_argument(
+        "--periodic-probe-interval",
+        required=False,
+        default=5,
+        type=int,
+        metavar="<cycles>",
+        help="Probe all online devices every N cycles to keep fresh (0=disabled, DEFAULT: 5).",
+    )
+    
+    parser.add_argument(
         "-d", 
         "--debug", 
         required=False, 
@@ -64,7 +154,18 @@ def blacktip_state_monitor():
     
     try:
         db = BlacktipDatabase(args.datafile)
-        monitor = DeviceStateMonitor(db)
+        monitor = DeviceStateMonitor(
+            db,
+            offline_threshold_seconds=args.offline_threshold,
+            enable_active_probing=args.enable_probing,
+            probe_timeout=args.probe_timeout,
+            probe_retry_count=args.probe_retries,
+            probe_failure_threshold=args.probe_failure_threshold,
+            enable_icmp_fallback=args.icmp_fallback,
+            probe_before_offline=args.probe_before_offline,
+            periodic_probe_interval=args.periodic_probe_interval,
+            interface=args.interface
+        )
         monitor.run_forever(check_interval_seconds=args.interval)
     except KeyboardInterrupt:
         print("\nState monitor stopped")

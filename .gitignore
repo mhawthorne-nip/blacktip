@@ -149,3 +149,4 @@ cython_debug/
 *.db
 *.sqlite
 *.log
+CLAUDE.md
