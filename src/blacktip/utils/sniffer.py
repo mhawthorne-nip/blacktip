@@ -11,6 +11,9 @@ from blacktip import __sniff_batch_timeout__ as SNIFF_BATCH_TIMEOUT
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import sniff, ARP
 
+# Use module-specific logger to avoid double logging
+logger = logging.getLogger(__name__)
+
 
 class BlacktipSniffer:
     """ARP packet sniffer with vendor lookup and anomaly detection"""
@@ -24,11 +27,11 @@ class BlacktipSniffer:
             # Update the vendor database on first run
             try:
                 self._mac_lookup.update_vendors()
-                logging.debug("MAC vendor database updated successfully")
+                logger.debug("MAC vendor database updated successfully")
             except Exception as e:
-                logging.debug("Could not update MAC vendor database: {}".format(e))
+                logger.debug("Could not update MAC vendor database: {}".format(e))
         except Exception as e:
-            logging.warning("Failed to initialize MAC vendor lookup: {}".format(e))
+            logger.warning("Failed to initialize MAC vendor lookup: {}".format(e))
 
     def get_hw_vendor(self, hw_address: str) -> str:
         """Get hardware vendor with caching and error handling
@@ -55,10 +58,10 @@ class BlacktipSniffer:
                     vendor = "Unknown"
             except KeyError:
                 # MAC not found in database
-                logging.debug("MAC vendor not found for: {}".format(hw_address))
+                logger.debug("MAC vendor not found for: {}".format(hw_address))
                 vendor = "Unknown"
             except Exception as e:
-                logging.debug("MAC vendor lookup failed for {}: {}".format(hw_address, e))
+                logger.debug("MAC vendor lookup failed for {}: {}".format(hw_address, e))
                 vendor = "Unknown"
 
         # Cache the result (even if Unknown to avoid repeated lookups)
@@ -77,9 +80,9 @@ class BlacktipSniffer:
         """
         hw_address = packet["src"]["hw"]
         ip_address = packet["src"]["ip"]
-        
+
         if not hw_address or not ip_address:
-            logging.warning("Invalid packet: hw={} ip={}".format(hw_address, ip_address))
+            logger.warning("Invalid packet: hw={} ip={}".format(hw_address, ip_address))
             return None
 
         # Lookup hardware vendor
@@ -100,7 +103,7 @@ class BlacktipSniffer:
                 "message": anomaly_msg,
                 "ts": timestamp()
             })
-            logging.warning("Potential ARP spoofing: {}".format(anomaly_msg))
+            logger.warning("Potential ARP spoofing: {}".format(anomaly_msg))
             db.log_anomaly("ip_mac_conflict", anomaly_msg, ip_address, hw_address)
         
         # Update database and get new status
@@ -142,10 +145,10 @@ class BlacktipSniffer:
             }
             if interface:
                 kwargs["iface"] = interface
-            
+
             sniffed_packets = sniff(**kwargs)
         except Exception as e:
-            logging.error("Error sniffing packets: {}".format(e))
+            logger.error("Error sniffing packets: {}".format(e))
             return packets
         
         for sniffed_packet in sniffed_packets:
@@ -160,7 +163,7 @@ class BlacktipSniffer:
                 elif sniffed_packet[ARP].op == 2:
                     packet["op"] = "reply"
                 else:
-                    logging.debug("Unknown ARP op: {}".format(sniffed_packet[ARP].op))
+                    logger.debug("Unknown ARP op: {}".format(sniffed_packet[ARP].op))
                     continue
 
                 packet["src"] = {
@@ -171,15 +174,15 @@ class BlacktipSniffer:
                     "hw": self.scrub_address("hw", sniffed_packet.sprintf("%ARP.hwdst%")),
                     "ip": self.scrub_address("ip", sniffed_packet.sprintf("%ARP.pdst%")),
                 }
-                
+
                 # Validate packet data
                 if not packet["src"]["hw"] or not packet["src"]["ip"]:
-                    logging.debug("Invalid packet: missing src hw/ip")
+                    logger.debug("Invalid packet: missing src hw/ip")
                     continue
-                
+
                 packets.append(packet)
             except Exception as e:
-                logging.warning("Error processing ARP packet: {}".format(e))
+                logger.warning("Error processing ARP packet: {}".format(e))
                 continue
 
         return packets
