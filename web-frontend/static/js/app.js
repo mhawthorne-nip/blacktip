@@ -161,7 +161,8 @@ class BlacktipApp {
                     device.mac_address,
                     device.vendor || '',
                     device.ptr_hostname || '',
-                    device.classified_type || ''
+                    device.classified_type || '',
+                    device.device_name || ''
                 ].join(' ').toLowerCase();
 
                 if (!searchableText.includes(this.searchTerm)) {
@@ -249,7 +250,7 @@ class BlacktipApp {
         if (this.filteredDevices.length === 0) {
             tbody.innerHTML = `
                 <tr class="loading-row">
-                    <td colspan="8">
+                    <td colspan="9">
                         <div class="empty-state">
                             <div class="empty-state-icon">🔍</div>
                             <div class="empty-state-text">No devices found</div>
@@ -268,6 +269,7 @@ class BlacktipApp {
                         ${device.is_online ? 'Online' : 'Offline'}
                     </span>
                 </td>
+                <td>${this.escapeHtml(device.device_name || '-')}</td>
                 <td class="mono">${this.escapeHtml(device.ip_address)}</td>
                 <td class="mono">${this.escapeHtml(device.mac_address)}</td>
                 <td>${this.escapeHtml(device.vendor || '-')}</td>
@@ -324,6 +326,12 @@ class BlacktipApp {
             const device = await response.json();
             modalBody.innerHTML = this.renderDeviceDetails(device);
 
+            // Attach event listener to save button
+            const saveBtn = document.getElementById('save-device-name-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => this.saveDeviceName(device.ip_address, device.mac_address));
+            }
+
         } catch (error) {
             console.error('Error loading device details:', error);
             modalBody.innerHTML = `
@@ -336,6 +344,71 @@ class BlacktipApp {
     }
 
     /**
+     * Save device name
+     */
+    async saveDeviceName(ip, mac) {
+        const nameInput = document.getElementById('device-name-input');
+        const saveBtn = document.getElementById('save-device-name-btn');
+
+        if (!nameInput || !saveBtn) {
+            return;
+        }
+
+        const deviceName = nameInput.value.trim();
+
+        // Disable button and show loading state
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            const response = await fetch(`${this.apiBase}/devices/${encodeURIComponent(ip)}/name`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    mac_address: mac,
+                    device_name: deviceName
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to save device name');
+            }
+
+            // Success! Update button state
+            saveBtn.textContent = 'Saved!';
+            saveBtn.style.background = 'var(--success-500, #28a745)';
+
+            // Reload devices to show updated name
+            setTimeout(() => {
+                this.loadData(true);
+                // Reset button after a short delay
+                setTimeout(() => {
+                    saveBtn.textContent = 'Save';
+                    saveBtn.style.background = 'var(--primary-500, #007bff)';
+                    saveBtn.disabled = false;
+                }, 1000);
+            }, 500);
+
+        } catch (error) {
+            console.error('Error saving device name:', error);
+            saveBtn.textContent = 'Error!';
+            saveBtn.style.background = 'var(--danger-500, #dc3545)';
+
+            // Reset button after delay
+            setTimeout(() => {
+                saveBtn.textContent = 'Save';
+                saveBtn.style.background = 'var(--primary-500, #007bff)';
+                saveBtn.disabled = false;
+            }, 2000);
+
+            alert('Failed to save device name: ' + error.message);
+        }
+    }
+
+    /**
      * Render device details HTML
      */
     renderDeviceDetails(device) {
@@ -343,6 +416,26 @@ class BlacktipApp {
             <div class="detail-section">
                 <h3>Basic Information</h3>
                 <div class="detail-grid">
+                    <div class="detail-item" style="grid-column: 1 / -1;">
+                        <div class="detail-label">Device Name</div>
+                        <div class="detail-value" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input
+                                type="text"
+                                id="device-name-input"
+                                value="${this.escapeHtml(device.device_name || '')}"
+                                placeholder="Enter a friendly name for this device"
+                                style="flex: 1; padding: 0.5rem; border: 1px solid var(--gray-300, #ddd); border-radius: 4px; font-size: 0.9rem;"
+                                data-ip="${this.escapeHtml(device.ip_address)}"
+                                data-mac="${this.escapeHtml(device.mac_address)}"
+                            />
+                            <button
+                                id="save-device-name-btn"
+                                style="padding: 0.5rem 1rem; background: var(--primary-500, #007bff); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
                     <div class="detail-item">
                         <div class="detail-label">IP Address</div>
                         <div class="detail-value">${this.escapeHtml(device.ip_address)}</div>
@@ -537,7 +630,7 @@ class BlacktipApp {
         const tbody = document.getElementById('devices-tbody');
         tbody.innerHTML = `
             <tr class="loading-row">
-                <td colspan="8">Loading devices...</td>
+                <td colspan="9">Loading devices...</td>
             </tr>
         `;
     }
@@ -549,7 +642,7 @@ class BlacktipApp {
         const tbody = document.getElementById('devices-tbody');
         tbody.innerHTML = `
             <tr class="loading-row">
-                <td colspan="8">
+                <td colspan="9">
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>
                         <div class="empty-state-text">${this.escapeHtml(message)}</div>
