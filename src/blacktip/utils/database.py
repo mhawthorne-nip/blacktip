@@ -2097,6 +2097,66 @@ class BlacktipDatabase:
             
             _logger.debug("Updated threshold for {}".format(metric_name))
 
+    def set_speed_test_threshold(self, metric: str, operator: str, threshold_value: float,
+                                 severity: str, enabled: bool = True, description: str = None):
+        """Set individual speed test threshold (for init script compatibility)
+        
+        This method translates individual threshold entries to the combined warning/critical format.
+        
+        Args:
+            metric: Metric name (download_mbps, upload_mbps, ping_ms)
+            operator: Comparison operator ('<' or '>')
+            threshold_value: Threshold value
+            severity: 'warning' or 'critical'
+            enabled: Whether threshold is enabled
+            description: Optional description
+        """
+        # Map from init script format to database format
+        metric_map = {
+            'download_mbps': 'download',
+            'upload_mbps': 'upload', 
+            'ping_ms': 'ping'
+        }
+        
+        metric_name = metric_map.get(metric, metric)
+        
+        # Get existing thresholds for this metric
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT warning_threshold, critical_threshold, enabled
+                FROM speed_test_thresholds
+                WHERE metric_name = ?
+            """, (metric_name,))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                warning = existing['warning_threshold']
+                critical = existing['critical_threshold']
+                current_enabled = existing['enabled']
+            else:
+                warning = None
+                critical = None
+                current_enabled = 1
+        
+        # Update the appropriate threshold
+        if severity == 'warning':
+            warning = threshold_value
+        elif severity == 'critical':
+            critical = threshold_value
+        
+        # Use upsert_speed_test_threshold to save
+        self.upsert_speed_test_threshold(
+            metric_name=metric_name,
+            warning=warning,
+            critical=critical,
+            enabled=enabled and current_enabled
+        )
+        
+        _logger.debug("Set {} {} threshold for {}: {}".format(
+            severity, metric, metric_name, threshold_value))
+
     def get_speed_test_thresholds(self) -> List[Dict]:
         """Get all speed test thresholds
         
