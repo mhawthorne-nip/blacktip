@@ -1782,6 +1782,7 @@ class BlacktipDatabase:
             else:
                 _logger.warning("Device not found: {} ({})".format(ip_address, mac_address))
 
+
     def insert_speed_test(self, test_data: Dict) -> int:
         """Insert speed test results
         
@@ -1901,7 +1902,7 @@ class BlacktipDatabase:
             params = []
             
             if days:
-                query += " AND datetime(test_start) > datetime(''now'', ''-{} days'')".format(days)
+                query += " AND datetime(test_start) > datetime('now', '-{} days')".format(days)
             
             query += " ORDER BY test_start DESC"
             
@@ -1959,11 +1960,11 @@ class BlacktipDatabase:
                     MIN(ping_ms) as min_ping,
                     MAX(ping_ms) as max_ping
                 FROM speed_tests
-                WHERE test_status = ''completed''
+                WHERE test_status = 'completed'
             """
             
             if days:
-                query += " AND datetime(test_start) > datetime(''now'', ''-{} days'')".format(days)
+                query += " AND datetime(test_start) > datetime('now', '-{} days')".format(days)
             
             cursor.execute(query)
             row = cursor.fetchone()
@@ -1977,7 +1978,7 @@ class BlacktipDatabase:
             network_data: Dictionary containing network info (public_ip, isp_name, etc.)
         """
         ts = timestamp()
-        public_ip = network_data.get(''public_ip'')
+        public_ip = network_data.get('public_ip')
         
         if not public_ip:
             _logger.warning("Cannot upsert network info without public_ip")
@@ -2007,14 +2008,14 @@ class BlacktipDatabase:
                         last_seen = ?
                     WHERE public_ip = ?
                 """, (
-                    network_data.get(''isp_name''),
-                    network_data.get(''hostname''),
-                    network_data.get(''city''),
-                    network_data.get(''region''),
-                    network_data.get(''country''),
-                    network_data.get(''timezone''),
-                    network_data.get(''latitude''),
-                    network_data.get(''longitude''),
+                    network_data.get('isp_name'),
+                    network_data.get('hostname'),
+                    network_data.get('city'),
+                    network_data.get('region'),
+                    network_data.get('country'),
+                    network_data.get('timezone'),
+                    network_data.get('latitude'),
+                    network_data.get('longitude'),
                     ts,
                     public_ip
                 ))
@@ -2027,14 +2028,14 @@ class BlacktipDatabase:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     public_ip,
-                    network_data.get(''isp_name''),
-                    network_data.get(''hostname''),
-                    network_data.get(''city''),
-                    network_data.get(''region''),
-                    network_data.get(''country''),
-                    network_data.get(''timezone''),
-                    network_data.get(''latitude''),
-                    network_data.get(''longitude''),
+                    network_data.get('isp_name'),
+                    network_data.get('hostname'),
+                    network_data.get('city'),
+                    network_data.get('region'),
+                    network_data.get('country'),
+                    network_data.get('timezone'),
+                    network_data.get('latitude'),
+                    network_data.get('longitude'),
                     ts,
                     ts
                 ))
@@ -2062,7 +2063,7 @@ class BlacktipDatabase:
         """Insert or update speed test threshold
         
         Args:
-            metric_name: ''download'', ''upload'', or ''ping''
+            metric_name: 'download', 'upload', or 'ping'
             warning: Warning threshold value
             critical: Critical threshold value
             enabled: Whether threshold checking is enabled
@@ -2124,60 +2125,60 @@ class BlacktipDatabase:
         violations = []
         
         for threshold in thresholds:
-            if not threshold[''enabled'']:
+            if not threshold['enabled']:
                 continue
             
-            metric = threshold[''metric_name'']
+            metric = threshold['metric_name']
             value = None
             
-            if metric == ''download'':
-                value = test_results.get(''download_mbps'')
-            elif metric == ''upload'':
-                value = test_results.get(''upload_mbps'')
-            elif metric == ''ping'':
-                value = test_results.get(''ping_ms'')
+            if metric == 'download':
+                value = test_results.get('download_mbps')
+            elif metric == 'upload':
+                value = test_results.get('upload_mbps')
+            elif metric == 'ping':
+                value = test_results.get('ping_ms')
             
             if value is None:
                 continue
             
             # For ping, higher is worse. For download/upload, lower is worse
-            if metric == ''ping'':
-                if threshold[''critical_threshold''] and value > threshold[''critical_threshold'']:
+            if metric == 'ping':
+                if threshold['critical_threshold'] and value > threshold['critical_threshold']:
                     violations.append({
-                        ''metric'': metric,
-                        ''value'': value,
-                        ''threshold'': threshold[''critical_threshold''],
-                        ''severity'': ''critical'',
-                        ''message'': ''Ping latency {} ms exceeds critical threshold of {} ms''.format(
-                            value, threshold[''critical_threshold''])
+                        'metric': metric,
+                        'value': value,
+                        'threshold': threshold['critical_threshold'],
+                        'severity': 'critical',
+                        'message': 'Ping latency {} ms exceeds critical threshold of {} ms'.format(
+                            value, threshold['critical_threshold'])
                     })
-                elif threshold[''warning_threshold''] and value > threshold[''warning_threshold'']:
+                elif threshold['warning_threshold'] and value > threshold['warning_threshold']:
                     violations.append({
-                        ''metric'': metric,
-                        ''value'': value,
-                        ''threshold'': threshold[''warning_threshold''],
-                        ''severity'': ''warning'',
-                        ''message'': ''Ping latency {} ms exceeds warning threshold of {} ms''.format(
-                            value, threshold[''warning_threshold''])
+                        'metric': metric,
+                        'value': value,
+                        'threshold': threshold['warning_threshold'],
+                        'severity': 'warning',
+                        'message': 'Ping latency {} ms exceeds warning threshold of {} ms'.format(
+                            value, threshold['warning_threshold'])
                     })
             else:  # download or upload
-                if threshold[''critical_threshold''] and value < threshold[''critical_threshold'']:
+                if threshold['critical_threshold'] and value < threshold['critical_threshold']:
                     violations.append({
-                        ''metric'': metric,
-                        ''value'': value,
-                        ''threshold'': threshold[''critical_threshold''],
-                        ''severity'': ''critical'',
-                        ''message'': ''{} speed {} Mbps below critical threshold of {} Mbps''.format(
-                            metric.capitalize(), value, threshold[''critical_threshold''])
+                        'metric': metric,
+                        'value': value,
+                        'threshold': threshold['critical_threshold'],
+                        'severity': 'critical',
+                        'message': '{} speed {} Mbps below critical threshold of {} Mbps'.format(
+                            metric.capitalize(), value, threshold['critical_threshold'])
                     })
-                elif threshold[''warning_threshold''] and value < threshold[''warning_threshold'']:
+                elif threshold['warning_threshold'] and value < threshold['warning_threshold']:
                     violations.append({
-                        ''metric'': metric,
-                        ''value'': value,
-                        ''threshold'': threshold[''warning_threshold''],
-                        ''severity'': ''warning'',
-                        ''message'': ''{} speed {} Mbps below warning threshold of {} Mbps''.format(
-                            metric.capitalize(), value, threshold[''warning_threshold''])
+                        'metric': metric,
+                        'value': value,
+                        'threshold': threshold['warning_threshold'],
+                        'severity': 'warning',
+                        'message': '{} speed {} Mbps below warning threshold of {} Mbps'.format(
+                            metric.capitalize(), value, threshold['warning_threshold'])
                     })
         
         return violations
