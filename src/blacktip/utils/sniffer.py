@@ -88,12 +88,25 @@ class BlacktipSniffer:
             # Update the vendor database using our working implementation
             # (the library's update_vendors() is broken and creates empty cache)
             cache_path = os.path.expanduser("~/.cache/mac-vendors.txt")
-            try:
-                vendor_count = _update_mac_vendors(cache_path)
-                logger.debug("MAC vendor database updated successfully ({} vendors)".format(vendor_count))
-            except Exception as e:
-                logger.warning("Could not update MAC vendor database: {}".format(e))
-                logger.warning("MAC vendor lookups may fail - check network connectivity and permissions")
+
+            # Check if we have a valid existing cache
+            cache_exists = os.path.exists(cache_path)
+            cache_size = os.path.getsize(cache_path) if cache_exists else 0
+
+            # Only update if cache doesn't exist or is empty/small
+            # Valid cache should be ~1MB with 38k+ vendors
+            if not cache_exists or cache_size < 100000:
+                try:
+                    vendor_count = _update_mac_vendors(cache_path)
+                    logger.debug("MAC vendor database updated successfully ({} vendors)".format(vendor_count))
+                except Exception as e:
+                    logger.warning("Could not update MAC vendor database: {}".format(e))
+                    if cache_exists and cache_size > 0:
+                        logger.info("Using existing MAC vendor cache ({} bytes)".format(cache_size))
+                    else:
+                        logger.warning("MAC vendor lookups may fail - check network connectivity and permissions")
+            else:
+                logger.debug("Using existing MAC vendor cache ({} bytes)".format(cache_size))
         except Exception as e:
             logger.warning("Failed to initialize MAC vendor lookup: {}".format(e))
 
