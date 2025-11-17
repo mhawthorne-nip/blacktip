@@ -302,6 +302,64 @@ class BlacktipDatabase:
                 )
             """)
 
+            # Network information table (ISP, public IP, location, etc.)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS network_info (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    public_ip TEXT NOT NULL,
+                    isp_name TEXT,
+                    hostname TEXT,
+                    city TEXT,
+                    region TEXT,
+                    country TEXT,
+                    timezone TEXT,
+                    latitude REAL,
+                    longitude REAL,
+                    first_seen TEXT NOT NULL,
+                    last_seen TEXT NOT NULL,
+                    UNIQUE(public_ip)
+                )
+            """)
+
+            # Speed tests table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS speed_tests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    test_start TEXT NOT NULL,
+                    test_end TEXT,
+                    download_mbps REAL,
+                    upload_mbps REAL,
+                    ping_ms REAL,
+                    jitter_ms REAL,
+                    packet_loss_percent REAL,
+                    isp_name TEXT,
+                    public_ip TEXT,
+                    server_name TEXT,
+                    server_host TEXT,
+                    server_location TEXT,
+                    server_country TEXT,
+                    server_distance_km REAL,
+                    test_status TEXT NOT NULL,
+                    error_message TEXT,
+                    test_duration_seconds REAL,
+                    triggered_by TEXT NOT NULL
+                )
+            """)
+
+            # Speed test thresholds for alerts
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS speed_test_thresholds (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    metric_name TEXT NOT NULL,
+                    warning_threshold REAL,
+                    critical_threshold REAL,
+                    enabled INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(metric_name)
+                )
+            """)
+
             # Generic NSE scripts output table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS nmap_scripts (
@@ -470,6 +528,33 @@ class BlacktipDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_device_class_type
                 ON device_classification(device_type)
+            """)
+
+            # Indexes for network info
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_network_info_ip
+                ON network_info(public_ip)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_network_info_last_seen
+                ON network_info(last_seen)
+            """)
+
+            # Indexes for speed tests
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_speed_tests_start
+                ON speed_tests(test_start)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_speed_tests_status
+                ON speed_tests(test_status)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_speed_tests_public_ip
+                ON speed_tests(public_ip)
             """)
 
             # Indexes for generic scripts
@@ -1696,3 +1781,403 @@ class BlacktipDatabase:
                     ip_address, mac_address, timestamp))
             else:
                 _logger.warning("Device not found: {} ({})".format(ip_address, mac_address))
+
+    def insert_speed_test(self, test_data: Dict) -> int:
+        """Insert speed test results
+        
+        Args:
+            test_data: Dictionary containing speed test results
+            
+        Returns:
+            test_id: The ID of the inserted test record
+        """
+        _logger.debug("Inserting speed test")
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO speed_tests
+                (test_start, test_end, download_mbps, upload_mbps,
+                 ping_ms, jitter_ms, packet_loss_percent, isp_name, public_ip,
+                 server_name, server_host, server_location, server_country,
+                 server_distance_km, test_status, error_message,
+                 test_duration_seconds, triggered_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                test_data.get('test_start'),
+                test_data.get('test_end'),
+                test_data.get('download_mbps'),
+                test_data.get('upload_mbps'),
+                test_data.get('ping_ms'),
+                test_data.get('jitter_ms'),
+                test_data.get('packet_loss_percent'),
+                test_data.get('isp_name'),
+                test_data.get('public_ip'),
+                test_data.get('server_name'),
+                test_data.get('server_host'),
+                test_data.get('server_location'),
+                test_data.get('server_country'),
+                test_data.get('server_distance_km'),
+                test_data.get('test_status'),
+                test_data.get('error_message'),
+                test_data.get('test_duration_seconds'),
+                test_data.get('triggered_by')
+            ))
+            
+            test_id = cursor.lastrowid
+            _logger.debug("Speed test inserted with ID {}".format(test_id))
+            return test_id
+
+    def update_speed_test(self, test_id: int, test_data: Dict):
+        """Update speed test results (for when test completes)
+        
+        Args:
+            test_id: The test ID to update
+            test_data: Dictionary containing updated test results
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE speed_tests
+                SET test_end = ?,
+                    download_mbps = ?,
+                    upload_mbps = ?,
+                    ping_ms = ?,
+                    jitter_ms = ?,
+                    packet_loss_percent = ?,
+                    isp_name = ?,
+                    public_ip = ?,
+                    server_name = ?,
+                    server_host = ?,
+                    server_location = ?,
+                    server_country = ?,
+                    server_distance_km = ?,
+                    test_status = ?,
+                    error_message = ?,
+                    test_duration_seconds = ?
+                WHERE id = ?
+            """, (
+                test_data.get('test_end'),
+                test_data.get('download_mbps'),
+                test_data.get('upload_mbps'),
+                test_data.get('ping_ms'),
+                test_data.get('jitter_ms'),
+                test_data.get('packet_loss_percent'),
+                test_data.get('isp_name'),
+                test_data.get('public_ip'),
+                test_data.get('server_name'),
+                test_data.get('server_host'),
+                test_data.get('server_location'),
+                test_data.get('server_country'),
+                test_data.get('server_distance_km'),
+                test_data.get('test_status'),
+                test_data.get('error_message'),
+                test_data.get('test_duration_seconds'),
+                test_id
+            ))
+            
+            _logger.debug("Updated speed test ID {}".format(test_id))
+
+    def get_speed_tests(self, limit: Optional[int] = None, 
+                       days: Optional[int] = None) -> List[Dict]:
+        """Get speed test history
+        
+        Args:
+            limit: Maximum number of tests to return (optional)
+            days: Only return tests from last N days (optional)
+            
+        Returns:
+            List of speed test dictionaries
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT * FROM speed_tests
+                WHERE 1=1
+            """
+            params = []
+            
+            if days:
+                query += " AND datetime(test_start) > datetime(''now'', ''-{} days'')".format(days)
+            
+            query += " ORDER BY test_start DESC"
+            
+            if limit:
+                query += " LIMIT ?"
+                params.append(limit)
+            
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_speed_test_by_id(self, test_id: int) -> Optional[Dict]:
+        """Get a specific speed test by ID
+        
+        Args:
+            test_id: The test ID
+            
+        Returns:
+            Speed test dictionary or None if not found
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM speed_tests WHERE id = ?
+            """, (test_id,))
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_speed_test_statistics(self, days: Optional[int] = None) -> Dict:
+        """Get aggregate speed test statistics
+        
+        Args:
+            days: Calculate stats for last N days (optional, all if not specified)
+            
+        Returns:
+            Dictionary with average speeds and counts
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT 
+                    COUNT(*) as total_tests,
+                    AVG(download_mbps) as avg_download,
+                    AVG(upload_mbps) as avg_upload,
+                    AVG(ping_ms) as avg_ping,
+                    MIN(download_mbps) as min_download,
+                    MAX(download_mbps) as max_download,
+                    MIN(upload_mbps) as min_upload,
+                    MAX(upload_mbps) as max_upload,
+                    MIN(ping_ms) as min_ping,
+                    MAX(ping_ms) as max_ping
+                FROM speed_tests
+                WHERE test_status = ''completed''
+            """
+            
+            if days:
+                query += " AND datetime(test_start) > datetime(''now'', ''-{} days'')".format(days)
+            
+            cursor.execute(query)
+            row = cursor.fetchone()
+            
+            return dict(row) if row else {}
+
+    def upsert_network_info(self, network_data: Dict):
+        """Insert or update network information
+        
+        Args:
+            network_data: Dictionary containing network info (public_ip, isp_name, etc.)
+        """
+        ts = timestamp()
+        public_ip = network_data.get(''public_ip'')
+        
+        if not public_ip:
+            _logger.warning("Cannot upsert network info without public_ip")
+            return
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if record exists
+            cursor.execute("""
+                SELECT id FROM network_info WHERE public_ip = ?
+            """, (public_ip,))
+            
+            existing = cursor.fetchone()
+            
+            if existing:
+                cursor.execute("""
+                    UPDATE network_info
+                    SET isp_name = ?,
+                        hostname = ?,
+                        city = ?,
+                        region = ?,
+                        country = ?,
+                        timezone = ?,
+                        latitude = ?,
+                        longitude = ?,
+                        last_seen = ?
+                    WHERE public_ip = ?
+                """, (
+                    network_data.get(''isp_name''),
+                    network_data.get(''hostname''),
+                    network_data.get(''city''),
+                    network_data.get(''region''),
+                    network_data.get(''country''),
+                    network_data.get(''timezone''),
+                    network_data.get(''latitude''),
+                    network_data.get(''longitude''),
+                    ts,
+                    public_ip
+                ))
+                _logger.debug("Updated network info for {}".format(public_ip))
+            else:
+                cursor.execute("""
+                    INSERT INTO network_info
+                    (public_ip, isp_name, hostname, city, region, country,
+                     timezone, latitude, longitude, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    public_ip,
+                    network_data.get(''isp_name''),
+                    network_data.get(''hostname''),
+                    network_data.get(''city''),
+                    network_data.get(''region''),
+                    network_data.get(''country''),
+                    network_data.get(''timezone''),
+                    network_data.get(''latitude''),
+                    network_data.get(''longitude''),
+                    ts,
+                    ts
+                ))
+                _logger.debug("Inserted network info for {}".format(public_ip))
+
+    def get_network_info(self) -> Optional[Dict]:
+        """Get the most recent network information
+        
+        Returns:
+            Network info dictionary or None if no data
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM network_info
+                ORDER BY last_seen DESC
+                LIMIT 1
+            """)
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def upsert_speed_test_threshold(self, metric_name: str, warning: Optional[float],
+                                    critical: Optional[float], enabled: bool = True):
+        """Insert or update speed test threshold
+        
+        Args:
+            metric_name: ''download'', ''upload'', or ''ping''
+            warning: Warning threshold value
+            critical: Critical threshold value
+            enabled: Whether threshold checking is enabled
+        """
+        ts = timestamp()
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO speed_test_thresholds
+                (metric_name, warning_threshold, critical_threshold, enabled,
+                 created_at, updated_at)
+                VALUES (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    COALESCE((SELECT created_at FROM speed_test_thresholds WHERE metric_name = ?), ?),
+                    ?
+                )
+            """, (
+                metric_name,
+                warning,
+                critical,
+                1 if enabled else 0,
+                metric_name,
+                ts,
+                ts
+            ))
+            
+            _logger.debug("Updated threshold for {}".format(metric_name))
+
+    def get_speed_test_thresholds(self) -> List[Dict]:
+        """Get all speed test thresholds
+        
+        Returns:
+            List of threshold dictionaries
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM speed_test_thresholds
+                ORDER BY metric_name
+            """)
+            
+            return [dict(row) for row in cursor.fetchall()]
+
+    def check_speed_test_thresholds(self, test_results: Dict) -> List[Dict]:
+        """Check if speed test results violate thresholds
+        
+        Args:
+            test_results: Speed test results dictionary
+            
+        Returns:
+            List of threshold violations
+        """
+        thresholds = self.get_speed_test_thresholds()
+        violations = []
+        
+        for threshold in thresholds:
+            if not threshold[''enabled'']:
+                continue
+            
+            metric = threshold[''metric_name'']
+            value = None
+            
+            if metric == ''download'':
+                value = test_results.get(''download_mbps'')
+            elif metric == ''upload'':
+                value = test_results.get(''upload_mbps'')
+            elif metric == ''ping'':
+                value = test_results.get(''ping_ms'')
+            
+            if value is None:
+                continue
+            
+            # For ping, higher is worse. For download/upload, lower is worse
+            if metric == ''ping'':
+                if threshold[''critical_threshold''] and value > threshold[''critical_threshold'']:
+                    violations.append({
+                        ''metric'': metric,
+                        ''value'': value,
+                        ''threshold'': threshold[''critical_threshold''],
+                        ''severity'': ''critical'',
+                        ''message'': ''Ping latency {} ms exceeds critical threshold of {} ms''.format(
+                            value, threshold[''critical_threshold''])
+                    })
+                elif threshold[''warning_threshold''] and value > threshold[''warning_threshold'']:
+                    violations.append({
+                        ''metric'': metric,
+                        ''value'': value,
+                        ''threshold'': threshold[''warning_threshold''],
+                        ''severity'': ''warning'',
+                        ''message'': ''Ping latency {} ms exceeds warning threshold of {} ms''.format(
+                            value, threshold[''warning_threshold''])
+                    })
+            else:  # download or upload
+                if threshold[''critical_threshold''] and value < threshold[''critical_threshold'']:
+                    violations.append({
+                        ''metric'': metric,
+                        ''value'': value,
+                        ''threshold'': threshold[''critical_threshold''],
+                        ''severity'': ''critical'',
+                        ''message'': ''{} speed {} Mbps below critical threshold of {} Mbps''.format(
+                            metric.capitalize(), value, threshold[''critical_threshold''])
+                    })
+                elif threshold[''warning_threshold''] and value < threshold[''warning_threshold'']:
+                    violations.append({
+                        ''metric'': metric,
+                        ''value'': value,
+                        ''threshold'': threshold[''warning_threshold''],
+                        ''severity'': ''warning'',
+                        ''message'': ''{} speed {} Mbps below warning threshold of {} Mbps''.format(
+                            metric.capitalize(), value, threshold[''warning_threshold''])
+                    })
+        
+        return violations

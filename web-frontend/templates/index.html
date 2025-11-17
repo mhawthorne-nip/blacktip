@@ -23,6 +23,10 @@
                 <span class="nav-icon">📅</span>
                 <span class="nav-label">Timeline</span>
             </a>
+            <a href="#" class="nav-item" data-view="internet">
+                <span class="nav-icon">🌐</span>
+                <span class="nav-label">Internet</span>
+            </a>
             <!-- Future tabs can go here -->
             <!--
             <a href="#" class="nav-item" data-view="anomalies">
@@ -154,6 +158,70 @@
 
             <div class="timeline-container" id="timeline-container">
                 <div class="loading-state">Loading timeline events...</div>
+            </div>
+        </div>
+
+        <!-- Internet View -->
+        <div id="internet-view" class="view">
+            <div class="view-header">
+                <h2>Internet Connection</h2>
+                <div class="view-controls">
+                    <button id="run-speedtest-btn" class="btn-primary">▶ Run Speed Test</button>
+                    <button id="refresh-internet-btn" class="btn-refresh">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- Speed Test Results Section -->
+            <div class="internet-section">
+                <h3>Speed Test Results</h3>
+                <div id="latest-speedtest-card" class="speedtest-card">
+                    <div class="loading-state">Loading latest speed test...</div>
+                </div>
+            </div>
+
+            <!-- Network Information Section -->
+            <div class="internet-section">
+                <h3>Network Information</h3>
+                <div id="network-info-card" class="network-info-card">
+                    <div class="loading-state">Loading network information...</div>
+                </div>
+            </div>
+
+            <!-- Performance Trends Section -->
+            <div class="internet-section">
+                <h3>Performance Trends</h3>
+                <div class="trend-controls">
+                    <label class="filter-label">
+                        <input type="radio" name="trend-period" value="7" checked>
+                        7d
+                    </label>
+                    <label class="filter-label">
+                        <input type="radio" name="trend-period" value="14">
+                        14d
+                    </label>
+                    <label class="filter-label">
+                        <input type="radio" name="trend-period" value="21">
+                        21d
+                    </label>
+                    <label class="filter-label">
+                        <input type="radio" name="trend-period" value="28">
+                        28d
+                    </label>
+                </div>
+                <div id="trend-stats-container" class="trend-stats-container">
+                    <div class="loading-state">Loading performance trends...</div>
+                </div>
+                <div id="trend-chart-container" class="trend-chart-container">
+                    <!-- Chart will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Historical Results Section -->
+            <div class="internet-section">
+                <h3>Test History</h3>
+                <div id="speedtest-history-container" class="speedtest-history-container">
+                    <div class="loading-state">Loading test history...</div>
+                </div>
             </div>
         </div>
 

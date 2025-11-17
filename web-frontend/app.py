@@ -6,6 +6,7 @@ Provides RESTful API endpoints for the Blacktip network scanner web interface.
 
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from flask import Flask, jsonify, request, render_template
@@ -13,6 +14,9 @@ from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Speed test service (initialized after database)
+speedtest_service = None
 
 # Disable caching for static files in development
 @app.after_request
@@ -556,11 +560,19 @@ class BlacktipWebAPI:
 # Initialize API
 try:
     api = BlacktipWebAPI(DEFAULT_DB_PATH)
+    
+    # Initialize speed test service
+    from blacktip.utils.database import BlacktipDatabase
+    from blacktip.utils.speedtest_service import SpeedTestService
+    db = BlacktipDatabase(DEFAULT_DB_PATH)
+    speedtest_service = SpeedTestService(database=db)
+    print("Speed test service initialized")
 except Exception as e:
     print("ERROR: Failed to initialize Blacktip Web API: {}".format(e))
     print("Using default database path: {}".format(DEFAULT_DB_PATH))
     print("Set BLACKTIP_DB environment variable if database is elsewhere.")
     api = None
+    speedtest_service = None
 
 
 # Routes
@@ -710,6 +722,195 @@ def update_device_name(ip_address):
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/speed-tests')
+def get_speed_tests():
+    """Get speed test history
+    
+    Query params:
+        limit: Maximum number of tests to return (default: 50)
+        days: Only return tests from last N days (optional)
+    
+    Returns:
+        JSON array of speed tests
+    """
+    if not speedtest_service:
+        return jsonify({'error': 'Speed test service not available'}), 500
+    
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        days = request.args.get('days', None, type=int)
+        
+        from blacktip.utils.database import BlacktipDatabase
+        db = BlacktipDatabase(DEFAULT_DB_PATH)
+        tests = db.get_speed_tests(limit=limit, days=days)
+        return jsonify(tests)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/speed-tests/<int:test_id>')
+def get_speed_test(test_id):
+    """Get specific speed test by ID
+    
+    Args:
+        test_id: Speed test ID
+    
+    Returns:
+        JSON speed test details
+    """
+    if not speedtest_service:
+        return jsonify({'error': 'Speed test service not available'}), 500
+    
+    try:
+        from blacktip.utils.database import BlacktipDatabase
+        db = BlacktipDatabase(DEFAULT_DB_PATH)
+        test = db.get_speed_test_by_id(test_id)
+        
+        if test:
+            return jsonify(test)
+        else:
+            return jsonify({'error': 'Speed test not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/speed-tests/run', methods=['POST'])
+def run_speed_test():
+    """Trigger a new speed test
+    
+    Returns:
+        JSON response with test ID and status
+    """
+    if not speedtest_service:
+        return jsonify({'error': 'Speed test service not available'}), 500
+    
+    try:
+        # Check if test can be run (rate limiting)
+        if not speedtest_service.can_run_test():
+            return jsonify({
+                'error': 'Please wait before running another test',
+                'message': 'Speed tests are rate-limited to prevent excessive testing'
+            }), 429
+        
+        # Run speed test in background thread to avoid blocking
+        def run_test_async():
+            try:
+                speedtest_service.run_speed_test(triggered_by='manual')
+            except Exception as e:
+                print("Error in background speed test: {}".format(e))
+        
+        thread = threading.Thread(target=run_test_async, daemon=True)
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Speed test started',
+            'note': 'This may take 20-30 seconds to complete'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/speed-tests/statistics')
+def get_speed_test_statistics():
+    """Get speed test statistics
+    
+    Query params:
+        days: Calculate stats for last N days (optional, all time if not specified)
+    
+    Returns:
+        JSON statistics
+    """
+    if not speedtest_service:
+        return jsonify({'error': 'Speed test service not available'}), 500
+    
+    try:
+        days = request.args.get('days', None, type=int)
+        
+        from blacktip.utils.database import BlacktipDatabase
+        db = BlacktipDatabase(DEFAULT_DB_PATH)
+        stats = db.get_speed_test_statistics(days=days)
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/network-info')
+def get_network_info():
+    """Get current network information
+    
+    Returns:
+        JSON network information
+    """
+    if not api:
+        return jsonify({'error': 'Database not available'}), 500
+    
+    try:
+        from blacktip.utils.database import BlacktipDatabase
+        db = BlacktipDatabase(DEFAULT_DB_PATH)
+        info = db.get_network_info()
+        
+        if info:
+            return jsonify(info)
+        else:
+            return jsonify({
+                'message': 'No network information available yet',
+                'suggestion': 'Run a speed test to collect network information'
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/speed-tests/thresholds', methods=['GET', 'PUT'])
+def manage_thresholds():
+    """Get or update speed test thresholds
+    
+    GET: Returns all thresholds
+    PUT: Updates thresholds (requires JSON body)
+    
+    Returns:
+        JSON threshold data
+    """
+    if not api:
+        return jsonify({'error': 'Database not available'}), 500
+    
+    from blacktip.utils.database import BlacktipDatabase
+    db = BlacktipDatabase(DEFAULT_DB_PATH)
+    
+    if request.method == 'GET':
+        try:
+            thresholds = db.get_speed_test_thresholds()
+            return jsonify(thresholds)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    elif request.method == 'PUT':
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Request body must be JSON'}), 400
+            
+            metric = data.get('metric_name')
+            warning = data.get('warning_threshold')
+            critical = data.get('critical_threshold')
+            enabled = data.get('enabled', True)
+            
+            if not metric:
+                return jsonify({'error': 'metric_name is required'}), 400
+            
+            if metric not in ['download', 'upload', 'ping']:
+                return jsonify({'error': 'Invalid metric_name. Must be download, upload, or ping'}), 400
+            
+            db.upsert_speed_test_threshold(metric, warning, critical, enabled)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Threshold updated for {}'.format(metric)
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
