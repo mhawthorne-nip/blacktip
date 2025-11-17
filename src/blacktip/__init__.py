@@ -54,3 +54,7 @@ __exec_max_runtime__ = 600  # Comprehensive enumeration with extensive NSE scrip
 # Nmap refresh configuration
 __nmap_refresh_interval__ = 3600  # Check for stale devices every hour (in seconds)
 __nmap_refresh_threshold_days__ = 7  # Rescan devices with nmap data older than 7 days
+
+# Speed test scheduler configuration
+__speedtest_scheduler_enabled__ = False  # Enable automatic speed tests
+__speedtest_interval_hours__ = 1  # Run speed test every N hours (default: 1)

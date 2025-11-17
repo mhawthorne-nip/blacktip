@@ -369,6 +369,29 @@ def blacktip():
         help="Interval in seconds between metrics log output (DEFAULT: 300).",
     )
 
+    # parser_group5 - Speed test scheduler
+    # ===
+    parser_group5 = parser.add_argument_group(
+        title="speed test scheduler arguments",
+        description="Enable automatic internet speed testing at regular intervals."
+    )
+    parser_group5.add_argument(
+        "--enable-speedtest",
+        required=False,
+        default=False,
+        action="store_true",
+        dest="enable_speedtest",
+        help="Enable automatic speed test scheduling (requires APScheduler and speedtest-cli).",
+    )
+    parser_group5.add_argument(
+        "--speedtest-interval",
+        required=False,
+        default=1,
+        type=int,
+        metavar="<hours>",
+        help="Interval in hours between automatic speed tests (DEFAULT: 1).",
+    )
+
     args = parser.parse_args()
 
     # Determine which command to execute
@@ -418,6 +441,8 @@ def blacktip():
                     interface=args.interface,
                     enable_metrics=args.metrics,
                     metrics_interval=args.metrics_interval,
+                    enable_speedtest=args.enable_speedtest,
+                    speedtest_interval_hours=args.speedtest_interval,
                 )
             except KeyboardInterrupt:
                 pass
