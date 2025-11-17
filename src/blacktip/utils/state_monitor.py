@@ -72,15 +72,26 @@ class DeviceStateMonitor:
             'online' or 'offline'
         """
         try:
-            # Parse timestamp
-            timestamp_str = last_seen.rstrip('Z')
+            # Parse timestamp - handle various ISO 8601 formats
+            # Try Python 3.7+ fromisoformat first (handles +00:00 timezone)
+            try:
+                # Replace 'Z' with '+00:00' for consistency
+                timestamp_str = last_seen.replace('Z', '+00:00')
+                last_seen_dt = datetime.fromisoformat(timestamp_str)
+            except (ValueError, AttributeError):
+                # Fallback for older formats or manual parsing
+                timestamp_str = last_seen.rstrip('Z').split('+')[0].split('-')[0]
+                
+                if '.' in timestamp_str:
+                    last_seen_dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f')
+                else:
+                    last_seen_dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+                
+                # Make timezone-aware if not already
+                if last_seen_dt.tzinfo is None:
+                    last_seen_dt = last_seen_dt.replace(tzinfo=timezone.utc)
             
-            if '.' in timestamp_str:
-                last_seen_dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f')
-            else:
-                last_seen_dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
-            
-            # Make timezone-aware
+            # Ensure we have a timezone-aware datetime
             if last_seen_dt.tzinfo is None:
                 last_seen_dt = last_seen_dt.replace(tzinfo=timezone.utc)
             
