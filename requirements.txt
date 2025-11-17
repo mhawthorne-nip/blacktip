@@ -7,5 +7,9 @@ psutil>=5.9.0,<6.0.0
 mac-vendor-lookup>=0.1.0,<1.0.0
 validators>=0.20.0,<1.0.0
 
+# Required for MAC vendor database updates (mac-vendor-lookup dependency)
+aiohttp>=3.8.0,<4.0.0
+aiofiles>=23.0.0,<24.0.0
+
 # Optional dependencies
 # Install with: pip install -r requirements.txt -r requirements-optional.txt

@@ -1,5 +1,7 @@
 
 import logging
+import asyncio
+import os
 from typing import Optional, Dict, List, Any
 from mac_vendor_lookup import MacLookup, BaseMacLookup
 
@@ -14,6 +16,65 @@ from scapy.all import sniff, ARP
 # Use module-specific logger to avoid double logging
 logger = logging.getLogger(__name__)
 
+# IEEE OUI database URL
+OUI_URL = "http://standards-oui.ieee.org/oui/oui.txt"
+
+
+async def _update_mac_vendors_async(cache_path: str) -> int:
+    """Update MAC vendor database with working async implementation
+
+    The mac-vendor-lookup library's update_vendors() is broken and creates
+    an empty cache file. This is our working replacement.
+
+    Args:
+        cache_path: Path to cache file
+
+    Returns:
+        Number of vendor entries written
+
+    Raises:
+        Exception: If download or parsing fails
+    """
+    import aiohttp
+    import aiofiles
+
+    # Ensure cache directory exists
+    cache_dir = os.path.dirname(cache_path)
+    if cache_dir and not os.path.exists(cache_dir):
+        os.makedirs(cache_dir, exist_ok=True)
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(OUI_URL, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            if response.status != 200:
+                raise Exception("HTTP {} from {}".format(response.status, OUI_URL))
+
+            async with aiofiles.open(cache_path, mode='wb') as f:
+                match_count = 0
+
+                while True:
+                    line = await response.content.readline()
+                    if not line:
+                        break
+
+                    if b"(base 16)" in line:
+                        prefix, vendor = (i.strip() for i in line.split(b"(base 16)", 1))
+                        await f.write(prefix + b":" + vendor + b"\n")
+                        match_count += 1
+
+                return match_count
+
+
+def _update_mac_vendors(cache_path: str) -> int:
+    """Synchronous wrapper for updating MAC vendor database
+
+    Args:
+        cache_path: Path to cache file
+
+    Returns:
+        Number of vendor entries written
+    """
+    return asyncio.run(_update_mac_vendors_async(cache_path))
+
 
 class BlacktipSniffer:
     """ARP packet sniffer with vendor lookup and anomaly detection"""
@@ -24,14 +85,15 @@ class BlacktipSniffer:
         self._mac_lookup: Optional[BaseMacLookup] = None
         try:
             self._mac_lookup = MacLookup()
-            # Update the vendor database on first run
+            # Update the vendor database using our working implementation
+            # (the library's update_vendors() is broken and creates empty cache)
+            cache_path = os.path.expanduser("~/.cache/mac-vendors.txt")
             try:
-                self._mac_lookup.update_vendors()
+                vendor_count = _update_mac_vendors(cache_path)
+                logger.debug("MAC vendor database updated successfully ({} vendors)".format(vendor_count))
             except Exception as e:
                 logger.warning("Could not update MAC vendor database: {}".format(e))
                 logger.warning("MAC vendor lookups may fail - check network connectivity and permissions")
-            else:
-                logger.debug("MAC vendor database updated successfully")
         except Exception as e:
             logger.warning("Failed to initialize MAC vendor lookup: {}".format(e))
 
