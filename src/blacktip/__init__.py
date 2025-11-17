@@ -49,7 +49,7 @@ __database_retry_delay__ = 1  # seconds
 __nmap__exec__ = "nmap -n -T4 -Pn -sV -O --script http-title,http-server-header,http-methods,http-favicon,ssl-cert,ssl-enum-ciphers,ssh-hostkey,ssh2-enum-algos,nbstat,smb-os-discovery,smb-protocols,smb-security-mode,dns-service-discovery,ftp-anon -oX - {IP}"
 
 # Command execution configuration
-__exec_max_runtime__ = 120  # Increased for comprehensive enumeration with extensive NSE scripts
+__exec_max_runtime__ = 240  # Increased for comprehensive enumeration with extensive NSE scripts (4 minutes)
 
 # Nmap refresh configuration
 __nmap_refresh_interval__ = 3600  # Check for stale devices every hour (in seconds)
