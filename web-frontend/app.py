@@ -353,10 +353,59 @@ class BlacktipWebAPI:
         events = []
         now = datetime.now(timezone.utc)
 
-        # Get all devices with their activity data
+        # Get state transition events from the database
         cursor.execute("""
-            SELECT
-                d.id,
+            SELECT 
+                se.timestamp,
+                se.event_type,
+                se.ip_address,
+                se.mac_address,
+                se.new_state,
+                se.previous_state,
+                d.device_name,
+                d.vendor,
+                dc.device_type as classified_type,
+                dns.ptr_hostname
+            FROM device_state_events se
+            LEFT JOIN devices d ON se.ip_address = d.ip_address AND se.mac_address = d.mac_address
+            LEFT JOIN device_dns dns ON se.ip_address = dns.ip_address
+            LEFT JOIN device_classification dc ON se.ip_address = dc.ip_address
+            ORDER BY se.timestamp DESC
+            LIMIT ?
+        """, (limit,))
+
+        state_events = [dict(row) for row in cursor.fetchall()]
+
+        for event in state_events:
+            device_name = self._get_device_display_name(event)
+            device_type = event.get('classified_type') or event.get('vendor') or 'Unknown Device'
+            
+            if event['new_state'] == 'online':
+                events.append({
+                    'timestamp': event['timestamp'],
+                    'event_type': 'online',
+                    'device_name': device_name,
+                    'device_type': device_type,
+                    'ip_address': event['ip_address'],
+                    'mac_address': event['mac_address'],
+                    'title': '{} went online'.format(device_name),
+                    'description': 'The device {} came online.'.format(device_type)
+                })
+            else:  # offline
+                events.append({
+                    'timestamp': event['timestamp'],
+                    'event_type': 'offline',
+                    'device_name': device_name,
+                    'device_type': device_type,
+                    'ip_address': event['ip_address'],
+                    'mac_address': event['mac_address'],
+                    'title': '{} went offline'.format(device_name),
+                    'description': 'The device {} went offline.'.format(device_type)
+                })
+
+        # Get device discovery events (first seen) - only get recent ones
+        cursor.execute("""
+            SELECT DISTINCT
                 d.ip_address,
                 d.mac_address,
                 d.vendor,
@@ -365,22 +414,21 @@ class BlacktipWebAPI:
                 d.device_type,
                 dc.device_type as classified_type,
                 d.first_seen,
-                d.last_seen,
                 dns.ptr_hostname
             FROM devices d
             LEFT JOIN device_dns dns ON d.ip_address = dns.ip_address
             LEFT JOIN device_classification dc ON d.ip_address = dc.ip_address
             ORDER BY d.first_seen DESC
-        """)
+            LIMIT ?
+        """, (limit,))
 
         devices = [dict(row) for row in cursor.fetchall()]
 
-        # For each device, create timeline events
         for device in devices:
             device_name = self._get_device_display_name(device)
             device_type = device.get('classified_type') or device.get('vendor') or 'Unknown Device'
 
-            # Event 1: Device discovered (first seen)
+            # Add discovery event
             first_seen = device['first_seen']
             events.append({
                 'timestamp': first_seen,
@@ -392,53 +440,6 @@ class BlacktipWebAPI:
                 'title': '{} was discovered'.format(device_name),
                 'description': 'The device {} joined the network.'.format(device_type)
             })
-
-            # Event 2: Current online/offline status
-            status_info = self._calculate_online_status(device['last_seen'])
-            last_seen = device['last_seen']
-
-            # Calculate time between first_seen and last_seen for duration
-            try:
-                first_dt = datetime.strptime(first_seen.rstrip('Z'), '%Y-%m-%dT%H:%M:%S.%f')
-                if first_dt.tzinfo is None:
-                    first_dt = first_dt.replace(tzinfo=timezone.utc)
-
-                last_dt = datetime.strptime(last_seen.rstrip('Z'), '%Y-%m-%dT%H:%M:%S.%f')
-                if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
-
-                duration_seconds = (last_dt - first_dt).total_seconds()
-                duration_str = self._format_duration(duration_seconds)
-            except:
-                duration_str = None
-
-            if status_info['is_online']:
-                # Device is currently online
-                events.append({
-                    'timestamp': last_seen,
-                    'event_type': 'online',
-                    'device_name': device_name,
-                    'device_type': device_type,
-                    'ip_address': device['ip_address'],
-                    'mac_address': device['mac_address'],
-                    'title': '{} went online'.format(device_name),
-                    'description': 'The device {} went online.'.format(device_type),
-                    'duration': duration_str
-                })
-            else:
-                # Device is currently offline
-                events.append({
-                    'timestamp': last_seen,
-                    'event_type': 'offline',
-                    'device_name': device_name,
-                    'device_type': device_type,
-                    'ip_address': device['ip_address'],
-                    'mac_address': device['mac_address'],
-                    'title': '{} went offline'.format(device_name),
-                    'description': 'The device {} went offline.'.format(device_type),
-                    'duration': duration_str,
-                    'time_ago': status_info['time_ago']
-                })
 
         # Get anomaly events
         cursor.execute("""

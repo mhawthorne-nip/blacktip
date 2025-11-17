@@ -16,6 +16,63 @@ def sigint_handler(__signal_received, __frame):
     exit(0)
 
 
+def blacktip_state_monitor():
+    """Run the device state monitor"""
+    signal(SIGINT, sigint_handler)
+    from blacktip.utils.database import BlacktipDatabase
+    from blacktip.utils.state_monitor import DeviceStateMonitor
+    from blacktip.utils import logger
+    
+    parser = argparse.ArgumentParser(
+        epilog="{} State Monitor v{}".format(NAME, VERSION),
+        add_help=True,
+        description="Monitor device online/offline state transitions and log events to database.",
+    )
+    
+    parser.add_argument(
+        "-f",
+        "--datafile",
+        required=True,
+        type=str,
+        metavar="<datafile>",
+        help="The blacktip datafile (SQLite database).",
+    )
+    
+    parser.add_argument(
+        "-i",
+        "--interval",
+        required=False,
+        default=60,
+        type=int,
+        metavar="<seconds>",
+        help="Interval in seconds between state checks (DEFAULT: 60).",
+    )
+    
+    parser.add_argument(
+        "-d", 
+        "--debug", 
+        required=False, 
+        default=False, 
+        action="store_true", 
+        help="Debug messages to stdout."
+    )
+    
+    args = parser.parse_args()
+    
+    logger_level = "debug" if args.debug else LOGGER_DEFAULT_LEVEL
+    logger.init(name=NAME, level=logger_level)
+    
+    try:
+        db = BlacktipDatabase(args.datafile)
+        monitor = DeviceStateMonitor(db)
+        monitor.run_forever(check_interval_seconds=args.interval)
+    except KeyboardInterrupt:
+        print("\nState monitor stopped")
+    except Exception as e:
+        print("Error: {}".format(e))
+        exit(1)
+
+
 def blacktip():
     signal(SIGINT, sigint_handler)
     from blacktip.blacktip import Blacktip  # late import to speed up situations where blacktip() is not started

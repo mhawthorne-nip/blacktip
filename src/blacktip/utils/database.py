@@ -112,6 +112,20 @@ class BlacktipDatabase:
                 )
             """)
 
+            # Device state transitions table (online/offline events)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS device_state_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ip_address TEXT NOT NULL,
+                    mac_address TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    previous_state TEXT,
+                    new_state TEXT NOT NULL,
+                    FOREIGN KEY (ip_address) REFERENCES devices(ip_address)
+                )
+            """)
+
             # Nmap scans table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS nmap_scans (
@@ -329,6 +343,16 @@ class BlacktipDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_anomalies_timestamp
                 ON anomalies(timestamp)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_device_state_events_timestamp
+                ON device_state_events(timestamp)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_device_state_events_ip
+                ON device_state_events(ip_address)
             """)
 
             cursor.execute("""
@@ -660,6 +684,87 @@ class BlacktipDatabase:
                 INSERT INTO anomalies (anomaly_type, message, ip_address, mac_address, timestamp)
                 VALUES (?, ?, ?, ?, ?)
             """, (anomaly_type, message, ip_address, mac_address, timestamp()))
+    
+    def log_state_transition(self, ip_address: str, mac_address: str, 
+                            event_type: str, previous_state: Optional[str], new_state: str):
+        """Log a device state transition (online/offline)
+        
+        Args:
+            ip_address: IP address of the device
+            mac_address: MAC address of the device
+            event_type: Type of event ('online' or 'offline')
+            previous_state: Previous state (None for first event)
+            new_state: New state ('online' or 'offline')
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO device_state_events 
+                (ip_address, mac_address, event_type, timestamp, previous_state, new_state)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (ip_address, mac_address, event_type, timestamp(), previous_state, new_state))
+            _logger.debug("Logged state transition for {} ({}): {} -> {}".format(
+                ip_address, mac_address, previous_state or 'new', new_state))
+    
+    def get_device_state_events(self, ip_address: Optional[str] = None, 
+                               limit: Optional[int] = None) -> List[Dict]:
+        """Get device state transition events
+        
+        Args:
+            ip_address: Filter by IP address (optional)
+            limit: Maximum number of events to return (optional)
+            
+        Returns:
+            List of state event dictionaries
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ip_address:
+                query = """
+                    SELECT * FROM device_state_events
+                    WHERE ip_address = ?
+                    ORDER BY timestamp DESC
+                """
+                if limit:
+                    query += " LIMIT ?"
+                    cursor.execute(query, (ip_address, limit))
+                else:
+                    cursor.execute(query, (ip_address,))
+            else:
+                query = """
+                    SELECT * FROM device_state_events
+                    ORDER BY timestamp DESC
+                """
+                if limit:
+                    query += " LIMIT ?"
+                    cursor.execute(query, (limit,))
+                else:
+                    cursor.execute(query)
+            
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_last_device_state(self, ip_address: str, mac_address: str) -> Optional[str]:
+        """Get the last known state for a device
+        
+        Args:
+            ip_address: IP address
+            mac_address: MAC address
+            
+        Returns:
+            Last state ('online' or 'offline') or None if no history
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT new_state FROM device_state_events
+                WHERE ip_address = ? AND mac_address = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (ip_address, mac_address))
+            
+            result = cursor.fetchone()
+            return result['new_state'] if result else None
     
     def query_by_address(self, address: str) -> Dict:
         """Query devices by IP or MAC address

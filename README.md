@@ -10,9 +10,11 @@ Unlike active scanners that send probe packets, Blacktip operates passively by l
 
 - **Passive Network Monitoring**: Zero-footprint ARP packet capture with no network traffic generation
 - **Real-time Device Discovery**: Instant detection of new devices the moment they join your network
+- **Device State Tracking**: Monitors and logs when devices go online/offline with historical state transitions
 - **Automated Security Scanning**: Integrated nmap scans automatically fingerprint new devices (ports, services, OS detection)
 - **Anomaly Detection**: Identifies ARP spoofing, IP conflicts, gratuitous ARP abuse, and MAC address changes
 - **Persistent SQLite Database**: Efficient storage with full device history, timestamps, and scan results
+- **Web Dashboard**: Modern web interface for viewing devices, timeline events, and network activity
 - **Performance Metrics**: Optional built-in metrics tracking for monitoring tool health and network activity patterns
 - **Flexible Event Handling**: Execute custom scripts/commands on any network event with template substitution
 - **Structured JSON Output**: Machine-readable event stream for integration with logging and SIEM systems

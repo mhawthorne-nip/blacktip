@@ -66,6 +66,7 @@ Changelog = "https://github.com/mhawthorne-nip/blacktip/blob/main/CHANGELOG.md"
 
 [project.scripts]
 blacktip = "blacktip.cli.entrypoints:blacktip"
+blacktip-state-monitor = "blacktip.cli.entrypoints:blacktip_state_monitor"
 
 [tool.setuptools]
 zip-safe = true
