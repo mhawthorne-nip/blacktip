@@ -36,6 +36,9 @@ class DeviceStateMonitor:
         devices = self.db.get_all_devices()
         
         for device in devices:
+            # Skip invalid/reserved IP addresses
+            if device['ip_address'] in ['0.0.0.0', '255.255.255.255']:
+                continue
             key = "{}:{}".format(device['ip_address'], device['mac_address'])
             
             # Check last known state from state events
@@ -111,6 +114,9 @@ class DeviceStateMonitor:
         transitions = 0
         
         for device in devices:
+            # Skip invalid/reserved IP addresses
+            if device['ip_address'] in ['0.0.0.0', '255.255.255.255']:
+                continue
             key = "{}:{}".format(device['ip_address'], device['mac_address'])
             current_state = self._calculate_current_state(device['last_seen'])
             previous_state = self._known_states.get(key)
