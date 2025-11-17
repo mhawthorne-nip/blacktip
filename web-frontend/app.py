@@ -361,6 +361,7 @@ class BlacktipWebAPI:
                 d.mac_address,
                 d.vendor,
                 d.hostname,
+                d.device_name,
                 d.device_type,
                 dc.device_type as classified_type,
                 d.first_seen,
