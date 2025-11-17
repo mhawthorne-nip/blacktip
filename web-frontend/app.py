@@ -14,6 +14,15 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Disable caching for static files in development
+@app.after_request
+def add_header(response):
+    """Add headers to prevent caching"""
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # Configuration
 DEFAULT_DB_PATH = os.environ.get('BLACKTIP_DB', '/var/lib/blacktip/blacktip.db')
 ONLINE_THRESHOLD_MINUTES = 10  # Consider device offline if not seen in 10 minutes
