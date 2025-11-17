@@ -1,5 +1,7 @@
 
 import logging
+import asyncio
+import os
 from typing import Optional, Dict, List, Any
 from mac_vendor_lookup import MacLookup, BaseMacLookup
 
@@ -14,6 +16,65 @@ from scapy.all import sniff, ARP
 # Use module-specific logger to avoid double logging
 logger = logging.getLogger(__name__)
 
+# IEEE OUI database URL
+OUI_URL = "http://standards-oui.ieee.org/oui/oui.txt"
+
+
+async def _update_mac_vendors_async(cache_path: str) -> int:
+    """Update MAC vendor database with working async implementation
+
+    The mac-vendor-lookup library's update_vendors() is broken and creates
+    an empty cache file. This is our working replacement.
+
+    Args:
+        cache_path: Path to cache file
+
+    Returns:
+        Number of vendor entries written
+
+    Raises:
+        Exception: If download or parsing fails
+    """
+    import aiohttp
+    import aiofiles
+
+    # Ensure cache directory exists
+    cache_dir = os.path.dirname(cache_path)
+    if cache_dir and not os.path.exists(cache_dir):
+        os.makedirs(cache_dir, exist_ok=True)
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(OUI_URL, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            if response.status != 200:
+                raise Exception("HTTP {} from {}".format(response.status, OUI_URL))
+
+            async with aiofiles.open(cache_path, mode='wb') as f:
+                match_count = 0
+
+                while True:
+                    line = await response.content.readline()
+                    if not line:
+                        break
+
+                    if b"(base 16)" in line:
+                        prefix, vendor = (i.strip() for i in line.split(b"(base 16)", 1))
+                        await f.write(prefix + b":" + vendor + b"\n")
+                        match_count += 1
+
+                return match_count
+
+
+def _update_mac_vendors(cache_path: str) -> int:
+    """Synchronous wrapper for updating MAC vendor database
+
+    Args:
+        cache_path: Path to cache file
+
+    Returns:
+        Number of vendor entries written
+    """
+    return asyncio.run(_update_mac_vendors_async(cache_path))
+
 
 class BlacktipSniffer:
     """ARP packet sniffer with vendor lookup and anomaly detection"""
@@ -24,12 +85,28 @@ class BlacktipSniffer:
         self._mac_lookup: Optional[BaseMacLookup] = None
         try:
             self._mac_lookup = MacLookup()
-            # Update the vendor database on first run
-            try:
-                self._mac_lookup.update_vendors()
-                logger.debug("MAC vendor database updated successfully")
-            except Exception as e:
-                logger.debug("Could not update MAC vendor database: {}".format(e))
+            # Update the vendor database using our working implementation
+            # (the library's update_vendors() is broken and creates empty cache)
+            cache_path = os.path.expanduser("~/.cache/mac-vendors.txt")
+
+            # Check if we have a valid existing cache
+            cache_exists = os.path.exists(cache_path)
+            cache_size = os.path.getsize(cache_path) if cache_exists else 0
+
+            # Only update if cache doesn't exist or is empty/small
+            # Valid cache should be ~1MB with 38k+ vendors
+            if not cache_exists or cache_size < 100000:
+                try:
+                    vendor_count = _update_mac_vendors(cache_path)
+                    logger.debug("MAC vendor database updated successfully ({} vendors)".format(vendor_count))
+                except Exception as e:
+                    logger.warning("Could not update MAC vendor database: {}".format(e))
+                    if cache_exists and cache_size > 0:
+                        logger.info("Using existing MAC vendor cache ({} bytes)".format(cache_size))
+                    else:
+                        logger.warning("MAC vendor lookups may fail - check network connectivity and permissions")
+            else:
+                logger.debug("Using existing MAC vendor cache ({} bytes)".format(cache_size))
         except Exception as e:
             logger.warning("Failed to initialize MAC vendor lookup: {}".format(e))
 
