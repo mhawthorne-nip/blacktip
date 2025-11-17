@@ -388,7 +388,8 @@ class BlacktipWebAPI:
                     'device_type': device_type,
                     'ip_address': event['ip_address'],
                     'mac_address': event['mac_address'],
-                    'title': '{} went online'.format(device_name)
+                    'title': '{} went online'.format(device_name),
+                    'description': 'The device {} came online.'.format(device_type)
                 })
             else:  # offline
                 events.append({
@@ -398,7 +399,8 @@ class BlacktipWebAPI:
                     'device_type': device_type,
                     'ip_address': event['ip_address'],
                     'mac_address': event['mac_address'],
-                    'title': '{} went offline'.format(device_name)
+                    'title': '{} went offline'.format(device_name),
+                    'description': 'The device {} went offline.'.format(device_type)
                 })
 
         # Get device discovery events (first seen) - only get recent ones

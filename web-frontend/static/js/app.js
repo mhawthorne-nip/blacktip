@@ -783,10 +783,6 @@ class BlacktipApp {
                         </div>
                     </div>
                     <div class="timeline-event-body">
-                        <div class="timeline-event-description">
-                            ${this.escapeHtml(event.description)}
-                            ${event.duration ? ` Duration: ${this.escapeHtml(event.duration)}.` : ''}
-                        </div>
                         <div class="timeline-event-meta">
                             ${event.ip_address ? `
                                 <div class="timeline-event-meta-item">
@@ -798,12 +794,6 @@ class BlacktipApp {
                                 <div class="timeline-event-meta-item">
                                     <span class="timeline-event-meta-label">MAC:</span>
                                     <span class="timeline-event-meta-value">${this.escapeHtml(event.mac_address)}</span>
-                                </div>
-                            ` : ''}
-                            ${event.device_type ? `
-                                <div class="timeline-event-meta-item">
-                                    <span class="timeline-event-meta-label">Type:</span>
-                                    <span>${this.escapeHtml(event.device_type)}</span>
                                 </div>
                             ` : ''}
                         </div>
