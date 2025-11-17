@@ -56,13 +56,13 @@ echo -e "${YELLOW}[2/8]${NC} Checking web frontend dependencies..."
 if ! python3 -c "import flask" 2>/dev/null; then
     echo -e "${YELLOW}Warning: Flask not found${NC}"
     echo "Installing web frontend dependencies..."
-    pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt"
+    pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt" --break-system-packages
 fi
 
 if ! python3 -c "import flask_cors" 2>/dev/null; then
     echo -e "${YELLOW}Warning: flask-cors not found${NC}"
     echo "Installing web frontend dependencies..."
-    pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt"
+    pip3 install -r "$SCRIPT_DIR/web-frontend/requirements.txt" --break-system-packages
 fi
 
 echo -e "${GREEN}✓${NC} Web frontend dependencies installed"
