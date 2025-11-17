@@ -279,14 +279,22 @@ class BlacktipSniffer:
         """
         if not address:
             return ""
-        
+
         if address_type == "ip":
             scrubbed = "".join(x for x in address if x in [".", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])
             # Basic IP validation
             parts = scrubbed.split(".")
             if len(parts) == 4:
                 try:
-                    if all(0 <= int(p) <= 255 for p in parts if p):
+                    # Validate each octet is 0-255
+                    if all(0 <= int(p) <= 255 for p in parts):
+                        # Reject reserved/special IP addresses
+                        if scrubbed == "0.0.0.0":
+                            logger.debug("Rejecting reserved IP: 0.0.0.0")
+                            return ""
+                        if scrubbed == "255.255.255.255":
+                            logger.debug("Rejecting broadcast IP: 255.255.255.255")
+                            return ""
                         return scrubbed
                 except ValueError:
                     pass
