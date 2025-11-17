@@ -27,9 +27,11 @@ class BlacktipSniffer:
             # Update the vendor database on first run
             try:
                 self._mac_lookup.update_vendors()
-                logger.debug("MAC vendor database updated successfully")
             except Exception as e:
-                logger.debug("Could not update MAC vendor database: {}".format(e))
+                logger.warning("Could not update MAC vendor database: {}".format(e))
+                logger.warning("MAC vendor lookups may fail - check network connectivity and permissions")
+            else:
+                logger.debug("MAC vendor database updated successfully")
         except Exception as e:
             logger.warning("Failed to initialize MAC vendor lookup: {}".format(e))
 
