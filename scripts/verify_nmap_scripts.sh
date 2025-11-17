@@ -8,7 +8,6 @@ REQUIRED_SCRIPTS=(
     "http-title"
     "http-server-header"
     "http-methods"
-    "http-robots-txt"
     "http-favicon"
     "ssl-cert"
     "ssl-enum-ciphers"
@@ -20,7 +19,6 @@ REQUIRED_SCRIPTS=(
     "smb-security-mode"
     "dns-service-discovery"
     "ftp-anon"
-    "ftp-banner"
 )
 
 echo "Checking for required NSE scripts in ${SCRIPT_DIR}..."

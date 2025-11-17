@@ -20,14 +20,13 @@ __database_retry_delay__ = 1  # seconds
 # -n: No DNS resolution (faster, we do DNS separately)
 # -T4: Aggressive timing
 # -Pn: Skip ping (assume host up)
-# -sV: Service version detection
+# -sV: Service version detection (includes HTTP server headers and FTP banners)
 # -O: OS detection
 # --script: Run NSE scripts for comprehensive enumeration
 #   HTTP scripts:
 #   - http-title: Get HTTP page titles
 #   - http-server-header: Get HTTP server headers
 #   - http-methods: Enumerate HTTP methods
-#   - http-robots-txt: Retrieve robots.txt
 #   - http-favicon: Get favicon hash for identification
 #   SSL/TLS scripts:
 #   - ssl-cert: Extract SSL certificate details
@@ -44,9 +43,10 @@ __database_retry_delay__ = 1  # seconds
 #   - dns-service-discovery: DNS-SD/Bonjour service discovery
 #   Other:
 #   - ftp-anon: Check anonymous FTP access
-#   - ftp-banner: Get FTP banner
+# Note: http-robots-txt and ftp-banner removed (not available in nmap 7.94)
+# Note: Service version detection (-sV) provides FTP banner and robots.txt info
 # -oX -: XML output to stdout
-__nmap__exec__ = "nmap -n -T4 -Pn -sV -O --script http-title,http-server-header,http-methods,http-robots-txt,http-favicon,ssl-cert,ssl-enum-ciphers,ssh-hostkey,ssh2-enum-algos,nbstat,smb-os-discovery,smb-protocols,smb-security-mode,dns-service-discovery,ftp-anon,ftp-banner -oX - {IP}"
+__nmap__exec__ = "nmap -n -T4 -Pn -sV -O --script http-title,http-server-header,http-methods,http-favicon,ssl-cert,ssl-enum-ciphers,ssh-hostkey,ssh2-enum-algos,nbstat,smb-os-discovery,smb-protocols,smb-security-mode,dns-service-discovery,ftp-anon -oX - {IP}"
 
 # Command execution configuration
 __exec_max_runtime__ = 120  # Increased for comprehensive enumeration with extensive NSE scripts
