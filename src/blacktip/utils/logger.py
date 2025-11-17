@@ -53,7 +53,9 @@ class Logger:
             log_level = "info"
 
         logger_init = logging.getLogger(name)
-        if logger_init.level > 0:
+        
+        # Check if already configured to prevent duplicate handlers
+        if logger_init.handlers:
             self.logger = logger_init
             return
 
@@ -82,6 +84,9 @@ class Logger:
 
         stream_handler.setFormatter(formatter)
         logger_init.addHandler(stream_handler)
+        
+        # Disable propagation to root logger to prevent duplicate console output
+        logger_init.propagate = False
 
         self.logger = logger_init
 
