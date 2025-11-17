@@ -1696,7 +1696,3 @@ class BlacktipDatabase:
                     ip_address, mac_address, timestamp))
             else:
                 _logger.warning("Device not found: {} ({})".format(ip_address, mac_address))
-                raise ValueError("Device not found")
-
-            _logger.debug("Updated device name for MAC {} (currently at {}) to '{}' ({} record(s) updated)".format(
-                mac_address, ip_address, device_name, cursor.rowcount))
