@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blacktip - Network Scanner Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>Blacktip</h1>
+            <p class="subtitle">Network Scanner</p>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-view="devices">
+                <span class="nav-icon">📡</span>
+                <span class="nav-label">Devices</span>
+            </a>
+            <a href="#" class="nav-item" data-view="timeline">
+                <span class="nav-icon">📅</span>
+                <span class="nav-label">Timeline</span>
+            </a>
+            <!-- Future tabs can go here -->
+            <!--
+            <a href="#" class="nav-item" data-view="anomalies">
+                <span class="nav-icon">⚠️</span>
+                <span class="nav-label">Anomalies</span>
+            </a>
+            <a href="#" class="nav-item" data-view="statistics">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Statistics</span>
+            </a>
+            -->
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="stats-summary">
+                <div class="stat-item">
+                    <span class="stat-label">Total Devices</span>
+                    <span class="stat-value" id="total-devices">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Online</span>
+                    <span class="stat-value online" id="online-devices">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Offline</span>
+                    <span class="stat-value offline" id="offline-devices">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <!-- Devices View -->
+        <div id="devices-view" class="view active">
+            <div class="view-header">
+                <h2>Discovered Devices</h2>
+                <div class="view-controls">
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="Search by IP, MAC, or vendor...">
+                    </div>
+                    <div class="filter-controls">
+                        <label class="filter-label">
+                            <input type="radio" name="status-filter" value="all" checked>
+                            All
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="status-filter" value="online">
+                            Online
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="status-filter" value="offline">
+                            Offline
+                        </label>
+                    </div>
+                    <button id="refresh-btn" class="btn-refresh">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="devices-table" id="devices-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="is_online">
+                                <span class="th-content">Status</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="ip_address">
+                                <span class="th-content">IP Address</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="mac_address">
+                                <span class="th-content">MAC Address</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="vendor">
+                                <span class="th-content">Vendor</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="ptr_hostname">
+                                <span class="th-content">Hostname</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="classified_type">
+                                <span class="th-content">Type</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="open_port_count">
+                                <span class="th-content">Open Ports</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                            <th class="sortable" data-sort="last_seen">
+                                <span class="th-content">Last Seen</span>
+                                <span class="sort-indicator"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="devices-tbody">
+                        <tr class="loading-row">
+                            <td colspan="8">Loading devices...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Timeline View -->
+        <div id="timeline-view" class="view">
+            <div class="view-header">
+                <h2>Device Timeline</h2>
+                <div class="view-controls">
+                    <div class="filter-controls">
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="all" checked>
+                            All Events
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="online">
+                            Online
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="offline">
+                            Offline
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="discovered">
+                            Discovered
+                        </label>
+                    </div>
+                    <button id="refresh-timeline-btn" class="btn-refresh">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="timeline-container" id="timeline-container">
+                <div class="loading-state">Loading timeline events...</div>
+            </div>
+        </div>
+
+        <!-- Other views can be added here -->
+    </div>
+
+    <!-- Device Detail Modal -->
+    <div id="device-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Device Details</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
