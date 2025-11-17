@@ -19,6 +19,10 @@
                 <span class="nav-icon">📡</span>
                 <span class="nav-label">Devices</span>
             </a>
+            <a href="#" class="nav-item" data-view="timeline">
+                <span class="nav-icon">📅</span>
+                <span class="nav-label">Timeline</span>
+            </a>
             <!-- Future tabs can go here -->
             <!--
             <a href="#" class="nav-item" data-view="anomalies">
@@ -122,6 +126,38 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Timeline View -->
+        <div id="timeline-view" class="view">
+            <div class="view-header">
+                <h2>Device Timeline</h2>
+                <div class="view-controls">
+                    <div class="filter-controls">
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="all" checked>
+                            All Events
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="online">
+                            Online
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="offline">
+                            Offline
+                        </label>
+                        <label class="filter-label">
+                            <input type="radio" name="timeline-filter" value="discovered">
+                            Discovered
+                        </label>
+                    </div>
+                    <button id="refresh-timeline-btn" class="btn-refresh">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="timeline-container" id="timeline-container">
+                <div class="loading-state">Loading timeline events...</div>
             </div>
         </div>
 

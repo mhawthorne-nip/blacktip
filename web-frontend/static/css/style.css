@@ -527,6 +527,129 @@ body {
     font-family: 'Courier New', Courier, monospace;
 }
 
+/* Timeline */
+.timeline-container {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.timeline-event {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    transition: background-color 0.15s;
+    cursor: pointer;
+}
+
+.timeline-event:last-child {
+    border-bottom: none;
+}
+
+.timeline-event:hover {
+    background-color: var(--gray-50);
+}
+
+.timeline-event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.timeline-event-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.timeline-event-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    font-size: 1rem;
+}
+
+.timeline-event-icon.discovered {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: var(--primary-color);
+}
+
+.timeline-event-icon.online {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+}
+
+.timeline-event-icon.offline {
+    background-color: rgba(107, 114, 128, 0.1);
+    color: var(--gray-600);
+}
+
+.timeline-event-icon.anomaly {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+}
+
+.timeline-event-time {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    white-space: nowrap;
+}
+
+.timeline-event-timestamp {
+    display: block;
+    margin-bottom: 0.125rem;
+}
+
+.timeline-event-ago {
+    display: block;
+    font-weight: 600;
+}
+
+.timeline-event-body {
+    margin-left: 2.5rem;
+}
+
+.timeline-event-description {
+    font-size: 0.875rem;
+    color: var(--gray-700);
+    margin-bottom: 0.5rem;
+}
+
+.timeline-event-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--gray-600);
+}
+
+.timeline-event-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.timeline-event-meta-label {
+    font-weight: 600;
+}
+
+.timeline-event-meta-value {
+    font-family: 'Courier New', monospace;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--gray-500);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     :root {

@@ -329,6 +329,185 @@ class BlacktipWebAPI:
         conn.close()
         return stats
 
+    def get_timeline(self, limit: Optional[int] = 100) -> List[Dict]:
+        """Generate timeline of device events (discovered, online, offline)
+
+        Args:
+            limit: Maximum number of events to return
+
+        Returns:
+            List of timeline event dictionaries
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        events = []
+        now = datetime.now(timezone.utc)
+
+        # Get all devices with their activity data
+        cursor.execute("""
+            SELECT
+                d.id,
+                d.ip_address,
+                d.mac_address,
+                d.vendor,
+                d.hostname,
+                d.device_type,
+                dc.device_type as classified_type,
+                d.first_seen,
+                d.last_seen,
+                dns.ptr_hostname
+            FROM devices d
+            LEFT JOIN device_dns dns ON d.ip_address = dns.ip_address
+            LEFT JOIN device_classification dc ON d.ip_address = dc.ip_address
+            ORDER BY d.first_seen DESC
+        """)
+
+        devices = [dict(row) for row in cursor.fetchall()]
+
+        # For each device, create timeline events
+        for device in devices:
+            device_name = self._get_device_display_name(device)
+            device_type = device.get('classified_type') or device.get('vendor') or 'Unknown Device'
+
+            # Event 1: Device discovered (first seen)
+            first_seen = device['first_seen']
+            events.append({
+                'timestamp': first_seen,
+                'event_type': 'discovered',
+                'device_name': device_name,
+                'device_type': device_type,
+                'ip_address': device['ip_address'],
+                'mac_address': device['mac_address'],
+                'title': '{} was discovered'.format(device_name),
+                'description': 'The device {} joined the network.'.format(device_type)
+            })
+
+            # Event 2: Current online/offline status
+            status_info = self._calculate_online_status(device['last_seen'])
+            last_seen = device['last_seen']
+
+            # Calculate time between first_seen and last_seen for duration
+            try:
+                first_dt = datetime.strptime(first_seen.rstrip('Z'), '%Y-%m-%dT%H:%M:%S.%f')
+                if first_dt.tzinfo is None:
+                    first_dt = first_dt.replace(tzinfo=timezone.utc)
+
+                last_dt = datetime.strptime(last_seen.rstrip('Z'), '%Y-%m-%dT%H:%M:%S.%f')
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+
+                duration_seconds = (last_dt - first_dt).total_seconds()
+                duration_str = self._format_duration(duration_seconds)
+            except:
+                duration_str = None
+
+            if status_info['is_online']:
+                # Device is currently online
+                events.append({
+                    'timestamp': last_seen,
+                    'event_type': 'online',
+                    'device_name': device_name,
+                    'device_type': device_type,
+                    'ip_address': device['ip_address'],
+                    'mac_address': device['mac_address'],
+                    'title': '{} went online'.format(device_name),
+                    'description': 'The device {} went online.'.format(device_type),
+                    'duration': duration_str
+                })
+            else:
+                # Device is currently offline
+                events.append({
+                    'timestamp': last_seen,
+                    'event_type': 'offline',
+                    'device_name': device_name,
+                    'device_type': device_type,
+                    'ip_address': device['ip_address'],
+                    'mac_address': device['mac_address'],
+                    'title': '{} went offline'.format(device_name),
+                    'description': 'The device {} went offline.'.format(device_type),
+                    'duration': duration_str,
+                    'time_ago': status_info['time_ago']
+                })
+
+        # Get anomaly events
+        cursor.execute("""
+            SELECT * FROM anomalies
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (limit,))
+
+        for row in cursor.fetchall():
+            anomaly = dict(row)
+            events.append({
+                'timestamp': anomaly['timestamp'],
+                'event_type': 'anomaly',
+                'device_name': anomaly.get('ip_address', 'Unknown'),
+                'device_type': anomaly['anomaly_type'],
+                'ip_address': anomaly.get('ip_address'),
+                'mac_address': anomaly.get('mac_address'),
+                'title': 'Security anomaly: {}'.format(anomaly['anomaly_type']),
+                'description': anomaly['message']
+            })
+
+        # Sort events by timestamp (newest first)
+        events.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        # Add time_ago to each event
+        for event in events[:limit]:
+            if 'time_ago' not in event:
+                status_info = self._calculate_online_status(event['timestamp'])
+                event['time_ago'] = status_info['time_ago']
+
+        conn.close()
+        return events[:limit]
+
+    def _get_device_display_name(self, device: Dict) -> str:
+        """Generate a display name for a device
+
+        Args:
+            device: Device dictionary
+
+        Returns:
+            Display name string
+        """
+        # Priority: hostname > device_type > IP address
+        if device.get('ptr_hostname'):
+            return device['ptr_hostname'].replace('.local', '').replace('.lan', '').title()
+        elif device.get('hostname'):
+            return device['hostname'].replace('.local', '').replace('.lan', '').title()
+        elif device.get('device_type'):
+            return '{} ({})'.format(device['device_type'].title(), device['ip_address'])
+        else:
+            return device['ip_address']
+
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration in seconds to human-readable string
+
+        Args:
+            seconds: Duration in seconds
+
+        Returns:
+            Formatted duration string (e.g., "2h 30m", "45m", "3d")
+        """
+        if seconds < 60:
+            return "{}s".format(int(seconds))
+        elif seconds < 3600:
+            mins = int(seconds / 60)
+            return "{}m".format(mins)
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            mins = int((seconds % 3600) / 60)
+            if mins > 0:
+                return "{}h {}m".format(hours, mins)
+            return "{}h".format(hours)
+        else:
+            days = int(seconds / 86400)
+            hours = int((seconds % 86400) / 3600)
+            if hours > 0:
+                return "{}d {}h".format(days, hours)
+            return "{}d".format(days)
+
 
 # Initialize API
 try:
@@ -400,6 +579,27 @@ def get_statistics():
     try:
         stats = api.get_statistics()
         return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/timeline')
+def get_timeline():
+    """Get timeline of device events
+
+    Query params:
+        limit: Maximum number of events (default: 100)
+
+    Returns:
+        JSON array of timeline events
+    """
+    if not api:
+        return jsonify({'error': 'Database not available'}), 500
+
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        timeline = api.get_timeline(limit=limit)
+        return jsonify(timeline)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

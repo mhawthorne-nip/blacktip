@@ -14,6 +14,12 @@ class BlacktipApp {
         this.searchTerm = '';
         this.apiBase = '/api';
 
+        // Timeline
+        this.timelineEvents = [];
+        this.filteredTimelineEvents = [];
+        this.timelineFilter = 'all';
+        this.currentView = 'devices';
+
         this.init();
     }
 
@@ -76,6 +82,31 @@ class BlacktipApp {
             if (e.key === 'Escape') {
                 this.closeModal();
             }
+        });
+
+        // Navigation tabs
+        document.querySelectorAll('.nav-item').forEach(navItem => {
+            navItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                const view = navItem.dataset.view;
+                this.switchView(view);
+            });
+        });
+
+        // Timeline refresh button
+        const timelineRefreshBtn = document.getElementById('refresh-timeline-btn');
+        if (timelineRefreshBtn) {
+            timelineRefreshBtn.addEventListener('click', () => {
+                this.loadTimeline();
+            });
+        }
+
+        // Timeline filter
+        document.querySelectorAll('input[name="timeline-filter"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.timelineFilter = e.target.value;
+                this.applyTimelineFilters();
+            });
         });
     }
 
@@ -551,6 +582,173 @@ class BlacktipApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Switch between views
+     */
+    switchView(viewName) {
+        this.currentView = viewName;
+
+        // Update navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.view === viewName) {
+                item.classList.add('active');
+            }
+        });
+
+        // Update content views
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.remove('active');
+        });
+
+        const targetView = document.getElementById(`${viewName}-view`);
+        if (targetView) {
+            targetView.classList.add('active');
+        }
+
+        // Load data for the view
+        if (viewName === 'timeline' && this.timelineEvents.length === 0) {
+            this.loadTimeline();
+        }
+    }
+
+    /**
+     * Load timeline events
+     */
+    async loadTimeline(silent = false) {
+        try {
+            if (!silent) {
+                this.showTimelineLoading();
+            }
+
+            const response = await fetch(`${this.apiBase}/timeline`);
+            if (!response.ok) {
+                throw new Error('Failed to load timeline');
+            }
+
+            this.timelineEvents = await response.json();
+            this.applyTimelineFilters();
+
+        } catch (error) {
+            console.error('Error loading timeline:', error);
+            this.showTimelineError('Failed to load timeline events.');
+        }
+    }
+
+    /**
+     * Apply timeline filters
+     */
+    applyTimelineFilters() {
+        this.filteredTimelineEvents = this.timelineEvents.filter(event => {
+            if (this.timelineFilter === 'all') {
+                return true;
+            }
+            return event.event_type === this.timelineFilter;
+        });
+
+        this.renderTimeline();
+    }
+
+    /**
+     * Render timeline events
+     */
+    renderTimeline() {
+        const container = document.getElementById('timeline-container');
+
+        if (this.filteredTimelineEvents.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📅</div>
+                    <div class="empty-state-text">No timeline events found</div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.filteredTimelineEvents.map(event => {
+            const iconMap = {
+                'discovered': '🆕',
+                'online': '🟢',
+                'offline': '⚫',
+                'anomaly': '⚠️'
+            };
+
+            const icon = iconMap[event.event_type] || '•';
+
+            return `
+                <div class="timeline-event" data-ip="${this.escapeHtml(event.ip_address || '')}">
+                    <div class="timeline-event-header">
+                        <div class="timeline-event-title">
+                            <span class="timeline-event-icon ${event.event_type}">${icon}</span>
+                            <span>${this.escapeHtml(event.title)}</span>
+                        </div>
+                        <div class="timeline-event-time">
+                            <span class="timeline-event-timestamp">${this.formatTimestamp(event.timestamp)}</span>
+                            <span class="timeline-event-ago">${this.escapeHtml(event.time_ago)}</span>
+                        </div>
+                    </div>
+                    <div class="timeline-event-body">
+                        <div class="timeline-event-description">
+                            ${this.escapeHtml(event.description)}
+                            ${event.duration ? ` Duration: ${this.escapeHtml(event.duration)}.` : ''}
+                        </div>
+                        <div class="timeline-event-meta">
+                            ${event.ip_address ? `
+                                <div class="timeline-event-meta-item">
+                                    <span class="timeline-event-meta-label">IP:</span>
+                                    <span class="timeline-event-meta-value">${this.escapeHtml(event.ip_address)}</span>
+                                </div>
+                            ` : ''}
+                            ${event.mac_address ? `
+                                <div class="timeline-event-meta-item">
+                                    <span class="timeline-event-meta-label">MAC:</span>
+                                    <span class="timeline-event-meta-value">${this.escapeHtml(event.mac_address)}</span>
+                                </div>
+                            ` : ''}
+                            ${event.device_type ? `
+                                <div class="timeline-event-meta-item">
+                                    <span class="timeline-event-meta-label">Type:</span>
+                                    <span>${this.escapeHtml(event.device_type)}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers to timeline events
+        container.querySelectorAll('.timeline-event').forEach(eventEl => {
+            eventEl.addEventListener('click', () => {
+                const ip = eventEl.dataset.ip;
+                if (ip) {
+                    this.showDeviceDetails(ip);
+                }
+            });
+        });
+    }
+
+    /**
+     * Show timeline loading state
+     */
+    showTimelineLoading() {
+        const container = document.getElementById('timeline-container');
+        container.innerHTML = '<div class="loading-state">Loading timeline events...</div>';
+    }
+
+    /**
+     * Show timeline error
+     */
+    showTimelineError(message) {
+        const container = document.getElementById('timeline-container');
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">⚠️</div>
+                <div class="empty-state-text">${this.escapeHtml(message)}</div>
+            </div>
+        `;
     }
 }
 
