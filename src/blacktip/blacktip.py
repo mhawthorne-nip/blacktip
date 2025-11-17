@@ -120,10 +120,6 @@ class Blacktip:
 
         try:
             while True:
-
-        try:
-            while True:
-
                 batch_packets = []
                 batch_start_time = time.time()
 
