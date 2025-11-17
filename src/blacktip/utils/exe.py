@@ -9,6 +9,8 @@ from blacktip import __exec_max_runtime__ as EXEC_MAX_RUNTIME
 from .utils import timestamp
 from . import logger
 from .nmap_parser import parse_nmap_xml
+from .dns_resolver import reverse_dns_lookup
+from .classifier import DeviceClassifier
 
 
 class BlacktipExec:
@@ -95,9 +97,59 @@ class BlacktipExec:
                                 xml_content = stdout.decode('utf-8', errors='ignore')
                                 scan_data = parse_nmap_xml(xml_content)
                                 if scan_data:
+                                    # Insert nmap scan data
                                     self.db.insert_nmap_scan(scan_data)
                                     logger.info("Nmap scan saved to database for {}".format(
                                         scan_data.get('ip_address')))
+
+                                    ip_address = scan_data.get('ip_address')
+
+                                    # Perform DNS reverse lookup
+                                    try:
+                                        hostname, response_time_ms, forward_validates = reverse_dns_lookup(ip_address)
+                                        if hostname or response_time_ms is not None:
+                                            self.db.upsert_dns_data(
+                                                ip_address,
+                                                hostname,
+                                                forward_validates,
+                                                response_time_ms
+                                            )
+                                            logger.debug("DNS lookup completed for {}: {}".format(
+                                                ip_address, hostname or 'no PTR record'))
+                                    except Exception as e:
+                                        logger.warning("DNS lookup failed for {}: {}".format(ip_address, e))
+
+                                    # Perform device classification
+                                    try:
+                                        # Gather classification data
+                                        classification_input = {
+                                            'vendor': scan_data.get('mac_vendor'),
+                                            'os_name': scan_data.get('os_name'),
+                                            'ports': scan_data.get('ports', []),
+                                            'hostname': hostname if hostname else scan_data.get('hostname'),
+                                            'netbios_name': None
+                                        }
+
+                                        # Get NetBIOS computer name if available
+                                        netbios_data = scan_data.get('netbios')
+                                        if netbios_data:
+                                            classification_input['netbios_name'] = (
+                                                netbios_data.get('netbios_computer_name') or
+                                                netbios_data.get('smb_computer_name')
+                                            )
+
+                                        # Classify device
+                                        classification = DeviceClassifier.classify_device(classification_input)
+
+                                        # Store classification if we got something useful
+                                        if classification.get('device_type') != 'unknown':
+                                            self.db.upsert_classification_data(ip_address, classification)
+                                            logger.debug("Device classified as {} (confidence: {:.2f})".format(
+                                                classification['device_type'],
+                                                classification['confidence_score']))
+                                    except Exception as e:
+                                        logger.warning("Device classification failed for {}: {}".format(ip_address, e))
+
                                 else:
                                     logger.warning("Failed to parse nmap XML output for command: {}".format(command[:100]))
                             else:

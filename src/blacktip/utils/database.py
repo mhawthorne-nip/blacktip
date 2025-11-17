@@ -188,6 +188,118 @@ class BlacktipDatabase:
                 )
             """)
 
+            # HTTP metadata table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_http (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    port INTEGER NOT NULL,
+                    http_title TEXT,
+                    http_server TEXT,
+                    http_status INTEGER,
+                    http_redirect_url TEXT,
+                    http_robots_txt TEXT,
+                    http_methods TEXT,
+                    http_favicon_hash TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
+
+            # SSL/TLS certificate table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_ssl (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    port INTEGER NOT NULL,
+                    ssl_subject TEXT,
+                    ssl_issuer TEXT,
+                    ssl_serial TEXT,
+                    ssl_not_before TEXT,
+                    ssl_not_after TEXT,
+                    ssl_fingerprint_sha1 TEXT,
+                    ssl_fingerprint_sha256 TEXT,
+                    ssl_ciphers TEXT,
+                    ssl_tls_versions TEXT,
+                    ssl_vulnerabilities TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
+
+            # SSH information table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_ssh (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    port INTEGER NOT NULL,
+                    ssh_protocol_version TEXT,
+                    ssh_hostkey_type TEXT,
+                    ssh_hostkey_fingerprint TEXT,
+                    ssh_hostkey_bits INTEGER,
+                    ssh_algorithms TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
+
+            # Vulnerability assessment table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_vulns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    port INTEGER,
+                    vuln_id TEXT,
+                    vuln_title TEXT,
+                    vuln_description TEXT,
+                    vuln_state TEXT,
+                    vuln_risk TEXT,
+                    cvss_score REAL,
+                    cve_id TEXT,
+                    exploit_available INTEGER DEFAULT 0,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
+
+            # DNS resolution table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS device_dns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ip_address TEXT NOT NULL,
+                    ptr_hostname TEXT,
+                    forward_validates INTEGER DEFAULT 0,
+                    dns_response_time_ms REAL,
+                    first_resolved TEXT NOT NULL,
+                    last_resolved TEXT NOT NULL,
+                    FOREIGN KEY (ip_address) REFERENCES devices(ip_address)
+                )
+            """)
+
+            # Device classification table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS device_classification (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ip_address TEXT NOT NULL,
+                    device_type TEXT,
+                    device_category TEXT,
+                    manufacturer TEXT,
+                    model TEXT,
+                    confidence_score REAL,
+                    classification_method TEXT,
+                    last_classified TEXT NOT NULL,
+                    FOREIGN KEY (ip_address) REFERENCES devices(ip_address)
+                )
+            """)
+
+            # Generic NSE scripts output table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS nmap_scripts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    scan_id INTEGER NOT NULL,
+                    port INTEGER,
+                    script_id TEXT NOT NULL,
+                    script_output TEXT,
+                    FOREIGN KEY (scan_id) REFERENCES nmap_scans(id) ON DELETE CASCADE
+                )
+            """)
+
             # Create indexes for performance
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_devices_ip 
@@ -273,6 +385,78 @@ class BlacktipDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_nmap_mdns_service_type
                 ON nmap_mdns_services(service_type)
+            """)
+
+            # Indexes for HTTP data
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_http_scan_id
+                ON nmap_http(scan_id)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_http_port
+                ON nmap_http(port)
+            """)
+
+            # Indexes for SSL data
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_ssl_scan_id
+                ON nmap_ssl(scan_id)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_ssl_port
+                ON nmap_ssl(port)
+            """)
+
+            # Indexes for SSH data
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_ssh_scan_id
+                ON nmap_ssh(scan_id)
+            """)
+
+            # Indexes for vulnerabilities
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_vulns_scan_id
+                ON nmap_vulns(scan_id)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_vulns_cve
+                ON nmap_vulns(cve_id)
+            """)
+
+            # Indexes for DNS data
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_device_dns_ip
+                ON device_dns(ip_address)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_device_dns_hostname
+                ON device_dns(ptr_hostname)
+            """)
+
+            # Indexes for classification
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_device_class_ip
+                ON device_classification(ip_address)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_device_class_type
+                ON device_classification(device_type)
+            """)
+
+            # Indexes for generic scripts
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_scripts_scan_id
+                ON nmap_scripts(scan_id)
+            """)
+
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_nmap_scripts_script_id
+                ON nmap_scripts(script_id)
             """)
 
             # Run schema migrations to add new columns
@@ -743,10 +927,122 @@ class BlacktipDatabase:
                     ))
                 _logger.debug("Inserted {} mDNS service(s) for scan ID {}".format(len(mdns_services), scan_id))
 
-            _logger.debug("Nmap scan inserted with ID {} ({} ports{}{})".format(
+            # Insert HTTP data if any
+            http_data = scan_data.get('http_data', [])
+            if http_data:
+                for data in http_data:
+                    cursor.execute("""
+                        INSERT INTO nmap_http
+                        (scan_id, port, http_title, http_server, http_status,
+                         http_redirect_url, http_robots_txt, http_methods, http_favicon_hash)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        scan_id,
+                        data.get('port'),
+                        data.get('title'),
+                        data.get('server'),
+                        data.get('status'),
+                        data.get('redirect_url'),
+                        data.get('robots_txt'),
+                        data.get('methods'),
+                        data.get('favicon_hash')
+                    ))
+                _logger.debug("Inserted {} HTTP record(s) for scan ID {}".format(len(http_data), scan_id))
+
+            # Insert SSL data if any
+            ssl_data = scan_data.get('ssl_data', [])
+            if ssl_data:
+                for data in ssl_data:
+                    cursor.execute("""
+                        INSERT INTO nmap_ssl
+                        (scan_id, port, ssl_subject, ssl_issuer, ssl_serial,
+                         ssl_not_before, ssl_not_after, ssl_fingerprint_sha1,
+                         ssl_fingerprint_sha256, ssl_ciphers, ssl_tls_versions, ssl_vulnerabilities)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        scan_id,
+                        data.get('port'),
+                        data.get('subject'),
+                        data.get('issuer'),
+                        data.get('serial'),
+                        data.get('not_before'),
+                        data.get('not_after'),
+                        data.get('sha1_fingerprint'),
+                        data.get('sha256_fingerprint'),
+                        data.get('ciphers'),
+                        data.get('tls_versions'),
+                        data.get('vulnerabilities')
+                    ))
+                _logger.debug("Inserted {} SSL record(s) for scan ID {}".format(len(ssl_data), scan_id))
+
+            # Insert SSH data if any
+            ssh_data = scan_data.get('ssh_data', [])
+            if ssh_data:
+                for data in ssh_data:
+                    cursor.execute("""
+                        INSERT INTO nmap_ssh
+                        (scan_id, port, ssh_protocol_version, ssh_hostkey_type,
+                         ssh_hostkey_fingerprint, ssh_hostkey_bits, ssh_algorithms)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        scan_id,
+                        data.get('port'),
+                        data.get('protocol_version'),
+                        data.get('hostkey_type'),
+                        data.get('hostkey_fingerprint'),
+                        data.get('hostkey_bits'),
+                        data.get('algorithms')
+                    ))
+                _logger.debug("Inserted {} SSH record(s) for scan ID {}".format(len(ssh_data), scan_id))
+
+            # Insert vulnerability data if any
+            vuln_data = scan_data.get('vuln_data', [])
+            if vuln_data:
+                for data in vuln_data:
+                    cursor.execute("""
+                        INSERT INTO nmap_vulns
+                        (scan_id, port, vuln_id, vuln_title, vuln_description,
+                         vuln_state, vuln_risk, cvss_score, cve_id, exploit_available)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        scan_id,
+                        data.get('port'),
+                        data.get('vuln_id'),
+                        data.get('title'),
+                        data.get('description'),
+                        data.get('state'),
+                        data.get('risk'),
+                        data.get('cvss_score'),
+                        data.get('cve_id'),
+                        data.get('exploit_available', 0)
+                    ))
+                _logger.debug("Inserted {} vulnerability record(s) for scan ID {}".format(len(vuln_data), scan_id))
+
+            # Insert generic script outputs if any
+            generic_scripts = scan_data.get('generic_scripts', [])
+            if generic_scripts:
+                for data in generic_scripts:
+                    cursor.execute("""
+                        INSERT INTO nmap_scripts
+                        (scan_id, port, script_id, script_output)
+                        VALUES (?, ?, ?, ?)
+                    """, (
+                        scan_id,
+                        data.get('port'),
+                        data.get('script_id'),
+                        data.get('output')
+                    ))
+                _logger.debug("Inserted {} script output record(s) for scan ID {}".format(len(generic_scripts), scan_id))
+
+            _logger.debug("Nmap scan inserted with ID {} ({} ports{}{}{}{}{}{}{})".format(
                 scan_id, len(ports),
                 ", with NetBIOS data" if netbios else "",
-                ", {} mDNS service(s)".format(len(mdns_services)) if mdns_services else ""))
+                ", {} mDNS service(s)".format(len(mdns_services)) if mdns_services else "",
+                ", {} HTTP record(s)".format(len(http_data)) if http_data else "",
+                ", {} SSL record(s)".format(len(ssl_data)) if ssl_data else "",
+                ", {} SSH record(s)".format(len(ssh_data)) if ssh_data else "",
+                ", {} vulnerability(ies)".format(len(vuln_data)) if vuln_data else "",
+                ", {} script output(s)".format(len(generic_scripts)) if generic_scripts else ""))
 
             return scan_id
 
@@ -920,3 +1216,253 @@ class BlacktipDatabase:
         except Exception as e:
             _logger.error("Failed to get database size: {}".format(e))
             return 0
+
+    def insert_http_data(self, scan_id: int, http_data: List[Dict]):
+        """Insert HTTP metadata from nmap scans
+
+        Args:
+            scan_id: The scan ID this data belongs to
+            http_data: List of HTTP data dictionaries
+        """
+        if not http_data:
+            return
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for data in http_data:
+                cursor.execute("""
+                    INSERT INTO nmap_http
+                    (scan_id, port, http_title, http_server, http_status,
+                     http_redirect_url, http_robots_txt, http_methods, http_favicon_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    data.get('port'),
+                    data.get('title'),
+                    data.get('server'),
+                    data.get('status'),
+                    data.get('redirect_url'),
+                    data.get('robots_txt'),
+                    data.get('methods'),
+                    data.get('favicon_hash')
+                ))
+        _logger.debug("Inserted {} HTTP record(s) for scan {}".format(len(http_data), scan_id))
+
+    def insert_ssl_data(self, scan_id: int, ssl_data: List[Dict]):
+        """Insert SSL/TLS certificate data from nmap scans
+
+        Args:
+            scan_id: The scan ID this data belongs to
+            ssl_data: List of SSL data dictionaries
+        """
+        if not ssl_data:
+            return
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for data in ssl_data:
+                cursor.execute("""
+                    INSERT INTO nmap_ssl
+                    (scan_id, port, ssl_subject, ssl_issuer, ssl_serial,
+                     ssl_not_before, ssl_not_after, ssl_fingerprint_sha1,
+                     ssl_fingerprint_sha256, ssl_ciphers, ssl_tls_versions, ssl_vulnerabilities)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    data.get('port'),
+                    data.get('subject'),
+                    data.get('issuer'),
+                    data.get('serial'),
+                    data.get('not_before'),
+                    data.get('not_after'),
+                    data.get('sha1_fingerprint'),
+                    data.get('sha256_fingerprint'),
+                    data.get('ciphers'),
+                    data.get('tls_versions'),
+                    data.get('vulnerabilities')
+                ))
+        _logger.debug("Inserted {} SSL record(s) for scan {}".format(len(ssl_data), scan_id))
+
+    def insert_ssh_data(self, scan_id: int, ssh_data: List[Dict]):
+        """Insert SSH host key data from nmap scans
+
+        Args:
+            scan_id: The scan ID this data belongs to
+            ssh_data: List of SSH data dictionaries
+        """
+        if not ssh_data:
+            return
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for data in ssh_data:
+                cursor.execute("""
+                    INSERT INTO nmap_ssh
+                    (scan_id, port, ssh_protocol_version, ssh_hostkey_type,
+                     ssh_hostkey_fingerprint, ssh_hostkey_bits, ssh_algorithms)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    data.get('port'),
+                    data.get('protocol_version'),
+                    data.get('hostkey_type'),
+                    data.get('hostkey_fingerprint'),
+                    data.get('hostkey_bits'),
+                    data.get('algorithms')
+                ))
+        _logger.debug("Inserted {} SSH record(s) for scan {}".format(len(ssh_data), scan_id))
+
+    def insert_vulnerability_data(self, scan_id: int, vuln_data: List[Dict]):
+        """Insert vulnerability assessment data from nmap scans
+
+        Args:
+            scan_id: The scan ID this data belongs to
+            vuln_data: List of vulnerability dictionaries
+        """
+        if not vuln_data:
+            return
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for data in vuln_data:
+                cursor.execute("""
+                    INSERT INTO nmap_vulns
+                    (scan_id, port, vuln_id, vuln_title, vuln_description,
+                     vuln_state, vuln_risk, cvss_score, cve_id, exploit_available)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    data.get('port'),
+                    data.get('vuln_id'),
+                    data.get('title'),
+                    data.get('description'),
+                    data.get('state'),
+                    data.get('risk'),
+                    data.get('cvss_score'),
+                    data.get('cve_id'),
+                    data.get('exploit_available', 0)
+                ))
+        _logger.debug("Inserted {} vulnerability record(s) for scan {}".format(len(vuln_data), scan_id))
+
+    def insert_script_output(self, scan_id: int, script_data: List[Dict]):
+        """Insert generic NSE script output
+
+        Args:
+            scan_id: The scan ID this data belongs to
+            script_data: List of script output dictionaries
+        """
+        if not script_data:
+            return
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for data in script_data:
+                cursor.execute("""
+                    INSERT INTO nmap_scripts
+                    (scan_id, port, script_id, script_output)
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    scan_id,
+                    data.get('port'),
+                    data.get('script_id'),
+                    data.get('output')
+                ))
+        _logger.debug("Inserted {} script output record(s) for scan {}".format(len(script_data), scan_id))
+
+    def upsert_dns_data(self, ip_address: str, ptr_hostname: Optional[str],
+                       forward_validates: bool = False, response_time_ms: Optional[float] = None):
+        """Insert or update DNS resolution data for a device
+
+        Args:
+            ip_address: IP address
+            ptr_hostname: PTR record hostname
+            forward_validates: Whether forward DNS matches reverse
+            response_time_ms: DNS response time in milliseconds
+        """
+        ts = timestamp()
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if record exists
+            cursor.execute("""
+                SELECT id FROM device_dns WHERE ip_address = ?
+            """, (ip_address,))
+
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute("""
+                    UPDATE device_dns
+                    SET ptr_hostname = ?,
+                        forward_validates = ?,
+                        dns_response_time_ms = ?,
+                        last_resolved = ?
+                    WHERE ip_address = ?
+                """, (ptr_hostname, 1 if forward_validates else 0, response_time_ms, ts, ip_address))
+            else:
+                cursor.execute("""
+                    INSERT INTO device_dns
+                    (ip_address, ptr_hostname, forward_validates, dns_response_time_ms,
+                     first_resolved, last_resolved)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (ip_address, ptr_hostname, 1 if forward_validates else 0,
+                      response_time_ms, ts, ts))
+
+        _logger.debug("Updated DNS data for {}".format(ip_address))
+
+    def upsert_classification_data(self, ip_address: str, classification: Dict):
+        """Insert or update device classification data
+
+        Args:
+            ip_address: IP address
+            classification: Dictionary with classification fields
+        """
+        ts = timestamp()
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check if record exists
+            cursor.execute("""
+                SELECT id FROM device_classification WHERE ip_address = ?
+            """, (ip_address,))
+
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute("""
+                    UPDATE device_classification
+                    SET device_type = ?, device_category = ?, manufacturer = ?,
+                        model = ?, confidence_score = ?, classification_method = ?,
+                        last_classified = ?
+                    WHERE ip_address = ?
+                """, (
+                    classification.get('device_type'),
+                    classification.get('device_category'),
+                    classification.get('manufacturer'),
+                    classification.get('model'),
+                    classification.get('confidence_score'),
+                    classification.get('classification_method'),
+                    ts,
+                    ip_address
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO device_classification
+                    (ip_address, device_type, device_category, manufacturer,
+                     model, confidence_score, classification_method, last_classified)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    ip_address,
+                    classification.get('device_type'),
+                    classification.get('device_category'),
+                    classification.get('manufacturer'),
+                    classification.get('model'),
+                    classification.get('confidence_score'),
+                    classification.get('classification_method'),
+                    ts
+                ))
+
+        _logger.debug("Updated classification for {} as {}".format(
+            ip_address, classification.get('device_type')))
