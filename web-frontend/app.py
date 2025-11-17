@@ -27,7 +27,7 @@ class BlacktipWebAPI:
         self._check_database()
 
     def _check_database(self):
-        """Verify database exists and is accessible"""
+        """Verify database exists and is accessible, and run migrations"""
         if not os.path.exists(self.db_path):
             raise FileNotFoundError(
                 "Blacktip database not found at: {}\n"
@@ -37,6 +37,15 @@ class BlacktipWebAPI:
             raise PermissionError(
                 "Cannot read Blacktip database at: {}".format(self.db_path)
             )
+
+        # Initialize BlacktipDatabase to run migrations
+        # This ensures the schema is up-to-date (e.g., device_name column exists)
+        try:
+            from blacktip.utils.database import BlacktipDatabase
+            db = BlacktipDatabase(self.db_path)
+            print("Database schema migrated successfully")
+        except Exception as e:
+            print("Warning: Could not run database migrations: {}".format(e))
 
     def _get_connection(self):
         """Get database connection with row factory"""
