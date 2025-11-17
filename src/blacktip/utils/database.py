@@ -508,8 +508,10 @@ class BlacktipDatabase:
             if column_name not in existing_columns:
                 try:
                     cursor.execute("ALTER TABLE devices ADD COLUMN {} {}".format(column_name, column_type))
+                    print("Added column '{}' to devices table".format(column_name))
                     _logger.debug("Added column '{}' to devices table".format(column_name))
                 except Exception as e:
+                    print("ERROR: Could not add column '{}': {}".format(column_name, e))
                     _logger.debug("Could not add column '{}': {}".format(column_name, e))
 
         # Get existing columns in nmap_ports table
