@@ -250,7 +250,7 @@ class BlacktipApp {
         if (this.filteredDevices.length === 0) {
             tbody.innerHTML = `
                 <tr class="loading-row">
-                    <td colspan="9">
+                    <td colspan="7">
                         <div class="empty-state">
                             <div class="empty-state-icon">🔍</div>
                             <div class="empty-state-text">No devices found</div>
@@ -273,8 +273,6 @@ class BlacktipApp {
                 <td class="mono">${this.escapeHtml(device.ip_address)}</td>
                 <td class="mono">${this.escapeHtml(device.mac_address)}</td>
                 <td>${this.escapeHtml(device.vendor || '-')}</td>
-                <td>${this.escapeHtml(device.ptr_hostname || '-')}</td>
-                <td>${this.escapeHtml(device.classified_type || '-')}</td>
                 <td>
                     ${device.open_port_count ?
                         `<span class="port-badge has-ports">${device.open_port_count}</span>` :
@@ -630,7 +628,7 @@ class BlacktipApp {
         const tbody = document.getElementById('devices-tbody');
         tbody.innerHTML = `
             <tr class="loading-row">
-                <td colspan="9">Loading devices...</td>
+                <td colspan="7">Loading devices...</td>
             </tr>
         `;
     }
@@ -642,7 +640,7 @@ class BlacktipApp {
         const tbody = document.getElementById('devices-tbody');
         tbody.innerHTML = `
             <tr class="loading-row">
-                <td colspan="9">
+                <td colspan="7">
                     <div class="empty-state">
                         <div class="empty-state-icon">⚠️</div>
                         <div class="empty-state-text">${this.escapeHtml(message)}</div>
