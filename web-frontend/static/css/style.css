@@ -695,3 +695,320 @@ body {
         max-height: 95vh;
     }
 }
+
+/* Internet Page - Speed Test Styles */
+
+/* Speed Test Results Card */
+.speedtest-results {
+    padding: 1.5rem;
+}
+
+.speedtest-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.speedtest-date {
+    font-weight: 500;
+    color: var(--gray-700);
+}
+
+.speedtest-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.metric {
+    text-align: center;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
+}
+
+.metric.download {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border-color: #93c5fd;
+}
+
+.metric.upload {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-color: #6ee7b7;
+}
+
+.metric.ping {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-color: #fcd34d;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-600);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.metric-value {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--gray-900);
+}
+
+.metric-unit {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+    margin-top: 0.25rem;
+    font-weight: 500;
+}
+
+.speedtest-server {
+    padding: 1rem;
+    background-color: var(--gray-50);
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+
+.server-label {
+    color: var(--gray-500);
+    margin-right: 0.5rem;
+}
+
+.server-value {
+    color: var(--gray-700);
+    font-weight: 500;
+}
+
+.speedtest-running {
+    text-align: center;
+    padding: 3rem 1.5rem;
+}
+
+.speedtest-running .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--gray-200);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.speedtest-running p {
+    color: var(--gray-600);
+    margin-bottom: 0.5rem;
+}
+
+.speedtest-running .hint {
+    font-size: 0.75rem;
+    color: var(--gray-400);
+}
+
+.speedtest-error {
+    padding: 2rem;
+    text-align: center;
+}
+
+.speedtest-error p {
+    color: var(--danger-color);
+}
+
+/* Network Info Card */
+.network-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    padding: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.info-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    font-weight: 600;
+}
+
+.info-value {
+    font-size: 0.875rem;
+    color: var(--gray-900);
+    font-weight: 500;
+}
+
+.info-value.mono {
+    font-family: 'Courier New', monospace;
+    background-color: var(--gray-100);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+/* Trend Stats */
+.trend-period-selector {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    background-color: var(--gray-100);
+    padding: 0.25rem;
+    border-radius: 8px;
+}
+
+.trend-period-selector input[type="radio"] {
+    display: none;
+}
+
+.trend-period-selector label {
+    flex: 1;
+    text-align: center;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-600);
+}
+
+.trend-period-selector input[type="radio"]:checked + label {
+    background-color: white;
+    color: var(--primary-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.trend-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    padding: 1.5rem;
+}
+
+.trend-stat {
+    text-align: center;
+    padding: 1.5rem 1rem;
+    background-color: var(--gray-50);
+    border-radius: 8px;
+    border: 1px solid var(--gray-200);
+}
+
+.trend-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.trend-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gray-900);
+}
+
+.trend-unit {
+    font-size: 0.875rem;
+    color: var(--gray-500);
+    font-weight: 500;
+}
+
+/* Speed Test History Table */
+.speedtest-history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.speedtest-history-table thead {
+    background-color: var(--gray-50);
+}
+
+.speedtest-history-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-600);
+    font-weight: 600;
+    border-bottom: 2px solid var(--gray-200);
+}
+
+.speedtest-history-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+}
+
+.speedtest-history-table tbody tr:hover {
+    background-color: var(--gray-50);
+}
+
+.metric-cell {
+    font-family: 'Courier New', monospace;
+    font-weight: 500;
+    color: var(--gray-900);
+}
+
+/* Responsive - Internet Page */
+@media (max-width: 1024px) {
+    .speedtest-metrics {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .network-info-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .trend-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .metric-value {
+        font-size: 2.5rem;
+    }
+
+    .trend-value {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .speedtest-history-table {
+        font-size: 0.75rem;
+    }
+
+    .speedtest-history-table th,
+    .speedtest-history-table td {
+        padding: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+    }
+
+    .trend-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .trend-period-selector {
+        flex-wrap: wrap;
+    }
+}

@@ -108,6 +108,22 @@ class BlacktipApp {
                 this.applyTimelineFilters();
             });
         });
+
+        // Internet page - Run speed test button
+        const runSpeedTestBtn = document.getElementById('run-speedtest-btn');
+        if (runSpeedTestBtn) {
+            runSpeedTestBtn.addEventListener('click', () => {
+                this.runSpeedTest();
+            });
+        }
+
+        // Internet page - Trend period selector
+        document.querySelectorAll('input[name="trend-period"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const days = parseInt(e.target.value);
+                this.loadSpeedTestTrends(days);
+            });
+        });
     }
 
     /**
@@ -703,6 +719,10 @@ class BlacktipApp {
         if (viewName === 'timeline' && this.timelineEvents.length === 0) {
             this.loadTimeline();
         }
+        
+        if (viewName === 'internet') {
+            this.loadInternetData();
+        }
     }
 
     /**
@@ -830,6 +850,388 @@ class BlacktipApp {
                 <div class="empty-state-text">${this.escapeHtml(message)}</div>
             </div>
         `;
+    }
+
+    /**
+     * Load Internet page data
+     */
+    loadInternetData() {
+        this.loadLatestSpeedTest();
+        this.loadNetworkInfo();
+        this.loadSpeedTestHistory();
+        this.loadSpeedTestTrends(7); // Default to 7 days
+    }
+
+    /**
+     * Load latest speed test
+     */
+    async loadLatestSpeedTest() {
+        const container = document.getElementById('latest-speedtest-card');
+        container.innerHTML = '<div class="loading-state">Loading latest speed test...</div>';
+
+        try {
+            const response = await fetch(`${this.apiBase}/speed-tests?limit=1`);
+            if (!response.ok) throw new Error('Failed to load speed test');
+
+            const tests = await response.json();
+            
+            if (tests.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🚀</div>
+                        <div class="empty-state-text">No speed tests yet</div>
+                        <button onclick="blacktipApp.runSpeedTest()" class="btn-primary" style="margin-top: 1rem;">
+                            Run First Speed Test
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            const test = tests[0];
+            this.renderSpeedTestCard(test, container);
+
+        } catch (error) {
+            console.error('Error loading speed test:', error);
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <div class="empty-state-text">Failed to load speed test</div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Render speed test card
+     */
+    renderSpeedTestCard(test, container) {
+        const status = test.test_status;
+        const isRunning = status === 'running';
+        const isFailed = status === 'failed';
+        const isCompleted = status === 'completed';
+
+        let html = `
+            <div class="speedtest-results">
+                <div class="speedtest-header">
+                    <div class="speedtest-date">${this.formatTimestamp(test.test_start)}</div>
+                    <span class="status-badge ${status}">${status}</span>
+                </div>
+        `;
+
+        if (isCompleted) {
+            html += `
+                <div class="speedtest-metrics">
+                    <div class="metric download">
+                        <div class="metric-label">Download</div>
+                        <div class="metric-value">${test.download_mbps.toFixed(1)}</div>
+                        <div class="metric-unit">Mbps</div>
+                    </div>
+                    <div class="metric upload">
+                        <div class="metric-label">Upload</div>
+                        <div class="metric-value">${test.upload_mbps.toFixed(1)}</div>
+                        <div class="metric-unit">Mbps</div>
+                    </div>
+                    <div class="metric ping">
+                        <div class="metric-label">Latency</div>
+                        <div class="metric-value">${test.ping_ms.toFixed(0)}</div>
+                        <div class="metric-unit">ms</div>
+                    </div>
+                </div>
+            `;
+
+            if (test.server_name) {
+                html += `
+                    <div class="speedtest-server">
+                        <span class="server-label">Server:</span>
+                        <span class="server-value">${this.escapeHtml(test.server_name)}, ${this.escapeHtml(test.server_location || '')}</span>
+                    </div>
+                `;
+            }
+        } else if (isRunning) {
+            html += `
+                <div class="speedtest-running">
+                    <div class="spinner"></div>
+                    <p>Running speed test... This may take 20-30 seconds.</p>
+                </div>
+            `;
+        } else if (isFailed) {
+            html += `
+                <div class="speedtest-error">
+                    <p>❌ Test failed: ${this.escapeHtml(test.error_message || 'Unknown error')}</p>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    /**
+     * Run a new speed test
+     */
+    async runSpeedTest() {
+        const btn = document.getElementById('run-speedtest-btn');
+        if (!btn) return;
+
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Running...';
+
+        try {
+            const response = await fetch(`${this.apiBase}/speed-tests/run`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to start speed test');
+            }
+
+            // Show running state
+            const container = document.getElementById('latest-speedtest-card');
+            container.innerHTML = `
+                <div class="speedtest-results">
+                    <div class="speedtest-running">
+                        <div class="spinner"></div>
+                        <p>Running speed test... This may take 20-30 seconds.</p>
+                        <p class="hint">The page will auto-refresh when complete.</p>
+                    </div>
+                </div>
+            `;
+
+            // Poll for results every 3 seconds
+            const pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${this.apiBase}/speed-tests?limit=1`);
+                    const tests = await response.json();
+                    
+                    if (tests.length > 0 && tests[0].test_status !== 'running') {
+                        clearInterval(pollInterval);
+                        this.loadInternetData();
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                } catch (e) {
+                    console.error('Poll error:', e);
+                }
+            }, 3000);
+
+            // Stop polling after 60 seconds
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }, 60000);
+
+        } catch (error) {
+            console.error('Error running speed test:', error);
+            alert('Failed to start speed test: ' + error.message);
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    /**
+     * Load network information
+     */
+    async loadNetworkInfo() {
+        const container = document.getElementById('network-info-card');
+        container.innerHTML = '<div class="loading-state">Loading network information...</div>';
+
+        try {
+            const response = await fetch(`${this.apiBase}/network-info`);
+            if (!response.ok) throw new Error('Failed to load network info');
+
+            const info = await response.json();
+            
+            if (!info || info.message) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🌐</div>
+                        <div class="empty-state-text">No network information available</div>
+                        <p class="hint">Run a speed test to collect network information</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="network-info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Service Provider</div>
+                        <div class="info-value">${this.escapeHtml(info.isp_name || '-')}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Public IP Address</div>
+                        <div class="info-value mono">${this.escapeHtml(info.public_ip || '-')}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Public Hostname</div>
+                        <div class="info-value mono">${this.escapeHtml(info.hostname || '-')}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Location</div>
+                        <div class="info-value">${this.formatLocation(info)}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Timezone</div>
+                        <div class="info-value">${this.escapeHtml(info.timezone || '-')}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Last Updated</div>
+                        <div class="info-value">${this.formatTimestamp(info.last_seen)}</div>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Error loading network info:', error);
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <div class="empty-state-text">Failed to load network information</div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Format location string
+     */
+    formatLocation(info) {
+        const parts = [];
+        if (info.city) parts.push(info.city);
+        if (info.region) parts.push(info.region);
+        if (info.country) parts.push(info.country);
+        return parts.length > 0 ? parts.join(', ') : '-';
+    }
+
+    /**
+     * Load speed test trends
+     */
+    async loadSpeedTestTrends(days) {
+        const container = document.getElementById('trend-stats-container');
+        container.innerHTML = '<div class="loading-state">Loading trends...</div>';
+
+        try {
+            const response = await fetch(`${this.apiBase}/speed-tests/statistics?days=${days}`);
+            if (!response.ok) throw new Error('Failed to load statistics');
+
+            const stats = await response.json();
+            
+            if (!stats.total_tests || stats.total_tests === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <div class="empty-state-text">No data for selected period</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="trend-stats">
+                    <div class="trend-stat">
+                        <div class="trend-label">Average Download</div>
+                        <div class="trend-value">${(stats.avg_download || 0).toFixed(1)} <span class="trend-unit">Mbps</span></div>
+                    </div>
+                    <div class="trend-stat">
+                        <div class="trend-label">Average Upload</div>
+                        <div class="trend-value">${(stats.avg_upload || 0).toFixed(1)} <span class="trend-unit">Mbps</span></div>
+                    </div>
+                    <div class="trend-stat">
+                        <div class="trend-label">Average Latency</div>
+                        <div class="trend-value">${(stats.avg_ping || 0).toFixed(0)} <span class="trend-unit">ms</span></div>
+                    </div>
+                    <div class="trend-stat">
+                        <div class="trend-label">Tests Run</div>
+                        <div class="trend-value">${stats.total_tests}</div>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Error loading trends:', error);
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <div class="empty-state-text">Failed to load trends</div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Load speed test history
+     */
+    async loadSpeedTestHistory() {
+        const container = document.getElementById('speedtest-history-container');
+        container.innerHTML = '<div class="loading-state">Loading test history...</div>';
+
+        try {
+            const response = await fetch(`${this.apiBase}/speed-tests?limit=20`);
+            if (!response.ok) throw new Error('Failed to load history');
+
+            const tests = await response.json();
+            
+            if (tests.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📝</div>
+                        <div class="empty-state-text">No test history</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const completedTests = tests.filter(t => t.test_status === 'completed');
+
+            if (completedTests.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📝</div>
+                        <div class="empty-state-text">No completed tests yet</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <table class="speedtest-history-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Download</th>
+                            <th>Upload</th>
+                            <th>Ping</th>
+                            <th>Server</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${completedTests.map(test => `
+                            <tr>
+                                <td>${this.formatTimestamp(test.test_start)}</td>
+                                <td class="metric-cell">${test.download_mbps.toFixed(1)} Mbps</td>
+                                <td class="metric-cell">${test.upload_mbps.toFixed(1)} Mbps</td>
+                                <td class="metric-cell">${test.ping_ms.toFixed(0)} ms</td>
+                                <td>${this.escapeHtml(test.server_location || '-')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+        } catch (error) {
+            console.error('Error loading history:', error);
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <div class="empty-state-text">Failed to load history</div>
+                </div>
+            `;
+        }
     }
 }
 
