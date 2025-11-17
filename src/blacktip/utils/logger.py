@@ -1,5 +1,7 @@
 import time
 import logging
+import os
+from pathlib import Path
 
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S %Z%z"
 
@@ -50,7 +52,7 @@ class Logger:
         if level is not None:
             log_level = level
         else:
-            log_level = "info"
+            log_level = os.environ.get("BLACKTIP_LOG_LEVEL", "info")
 
         logger_init = logging.getLogger(name)
         
@@ -62,28 +64,58 @@ class Logger:
         logger_init.setLevel(logging.DEBUG)
 
         log_level = log_level.upper()
-        stream_handler = logging.StreamHandler()
-
+        
+        # Determine the logging level
         if log_level in ("CRITICAL", "FATAL"):
-            stream_handler.setLevel(logging.CRITICAL)
+            handler_level = logging.CRITICAL
         elif log_level == "ERROR":
-            stream_handler.setLevel(logging.ERROR)
+            handler_level = logging.ERROR
         elif log_level in ("WARNING", "WARN"):
-            stream_handler.setLevel(logging.WARNING)
+            handler_level = logging.WARNING
         elif log_level == "INFO":
-            stream_handler.setLevel(logging.INFO)
+            handler_level = logging.INFO
         elif log_level == "DEBUG":
-            stream_handler.setLevel(logging.DEBUG)
+            handler_level = logging.DEBUG
         elif log_level is not None:
             raise LoggerException("unknown loglevel value", log_level)
         else:
-            stream_handler.setLevel(logging.NOTSET)
+            handler_level = logging.NOTSET
 
-        formatter = LoggerColoredFormatter(fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt=TIMESTAMP_FORMAT)
-        logging.Formatter.converter = time.localtime
-
-        stream_handler.setFormatter(formatter)
-        logger_init.addHandler(stream_handler)
+        # Check if file logging is enabled via environment variable
+        log_file = os.environ.get("BLACKTIP_LOG_FILE")
+        
+        if log_file:
+            # File logging mode - use file handler with plain formatter
+            log_file_path = Path(log_file)
+            
+            # Create log directory if it doesn't exist
+            log_file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            file_handler = logging.FileHandler(log_file, mode='a')
+            file_handler.setLevel(handler_level)
+            
+            # Use plain formatter for file logging (no color codes)
+            plain_formatter = logging.Formatter(
+                fmt="%(asctime)s - %(levelname)s - %(message)s",
+                datefmt=TIMESTAMP_FORMAT
+            )
+            logging.Formatter.converter = time.localtime
+            
+            file_handler.setFormatter(plain_formatter)
+            logger_init.addHandler(file_handler)
+        else:
+            # Console logging mode - use stream handler with colored formatter
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(handler_level)
+            
+            formatter = LoggerColoredFormatter(
+                fmt="%(asctime)s - %(levelname)s - %(message)s",
+                datefmt=TIMESTAMP_FORMAT
+            )
+            logging.Formatter.converter = time.localtime
+            
+            stream_handler.setFormatter(formatter)
+            logger_init.addHandler(stream_handler)
         
         # Disable propagation to root logger to prevent duplicate console output
         logger_init.propagate = False

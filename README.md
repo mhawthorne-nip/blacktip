@@ -38,20 +38,46 @@ cd blacktip
 
 2. Install using pip:
 ```bash
-# Standard installation
-pip install .
+# Ubuntu 22.04+ / Debian 12+ (externally-managed environment)
+sudo pip install --break-system-packages .
+
+# Older systems
+sudo pip install .
 
 # Development installation (editable mode)
-pip install -e .
+sudo pip install --break-system-packages -e .
 
 # Install with all optional dependencies
-pip install ".[all]"
+sudo pip install --break-system-packages ".[all]"
 ```
+
+**Note:** Modern Ubuntu/Debian systems require `--break-system-packages` flag. This is safe for system-level applications.
 
 3. Verify installation:
 ```bash
 blacktip --version
 ```
+
+### Ubuntu Service Installation
+
+For production deployment on Ubuntu with automatic startup and file logging:
+
+```bash
+# Quick automated installation
+sudo bash install-service.sh
+
+# Or with specific network interface
+sudo bash install-service.sh eth0
+```
+
+This will:
+- Install Blacktip system-wide
+- Configure as a systemd service with auto-start on boot
+- Set up file-based logging to `/var/log/blacktip/blacktip.log`
+- Configure log rotation
+- Start the service immediately
+
+For detailed setup instructions, see [SYSTEMD_SETUP.md](SYSTEMD_SETUP.md)
 
 ## Quick Start
 

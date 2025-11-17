@@ -1,0 +1,45 @@
+[Unit]
+Description=Blacktip Network Security Scanner
+Documentation=https://github.com/mhawthorne-nip/blacktip
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# Working directory
+WorkingDirectory=/opt/blacktip
+
+# Main service command - adjust parameters as needed
+ExecStart=/usr/local/bin/blacktip \
+    --datafile /var/lib/blacktip/blacktip.db \
+    --interval 300 \
+    --nmap \
+    --metrics \
+    --metrics-interval 300
+
+# Environment variables for file logging
+Environment="BLACKTIP_LOG_FILE=/var/log/blacktip/blacktip.log"
+Environment="BLACKTIP_LOG_LEVEL=info"
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=append:/var/log/blacktip/blacktip.log
+StandardError=append:/var/log/blacktip/blacktip.log
+SyslogIdentifier=blacktip
+
+# Process limits
+LimitNOFILE=65536
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target
