@@ -1505,25 +1505,31 @@ class BlacktipDatabase:
             ip_address, classification.get('device_type')))
 
     def update_device_name(self, ip_address: str, mac_address: str, device_name: str):
-        """Update the user-defined name for a device
+        """Update the user-defined name for a device (by MAC address)
+
+        This updates ALL devices with the given MAC address, since we want to name
+        the physical device (identified by MAC), not a specific IP/MAC combination.
+        The ip_address parameter is used for logging context only.
 
         Args:
-            ip_address: IP address of the device
-            mac_address: MAC address of the device
+            ip_address: IP address of the device (used for logging only)
+            mac_address: MAC address of the device (primary identifier)
             device_name: User-defined friendly name
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
 
-            # Update the device name for the specific IP/MAC combination
+            # Update the device name for ALL entries with this MAC address
+            # This ensures the name follows the physical device even if IP changes
             cursor.execute("""
                 UPDATE devices
                 SET device_name = ?
-                WHERE ip_address = ? AND mac_address = ?
-            """, (device_name if device_name else None, ip_address, mac_address))
+                WHERE mac_address = ?
+            """, (device_name if device_name else None, mac_address))
 
             if cursor.rowcount == 0:
-                _logger.warning("No device found for IP {} and MAC {}".format(ip_address, mac_address))
+                _logger.warning("No device found with MAC {}".format(mac_address))
                 raise ValueError("Device not found")
 
-        _logger.debug("Updated device name for {} ({}) to '{}'".format(ip_address, mac_address, device_name))
+            _logger.debug("Updated device name for MAC {} (currently at {}) to '{}' ({} record(s) updated)".format(
+                mac_address, ip_address, device_name, cursor.rowcount))
