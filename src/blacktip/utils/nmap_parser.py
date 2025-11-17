@@ -266,14 +266,6 @@ def _parse_http_scripts(host) -> Optional[List[Dict]]:
                 port_http_data['robots_txt'] = script.get('output', '').strip()[:500]  # Limit size
                 has_http_data = True
 
-            elif script_id == 'http-favicon':
-                # Look for hash value
-                for elem in script.findall('elem'):
-                    if elem.get('key') == 'hash':
-                        port_http_data['favicon_hash'] = elem.text
-                        has_http_data = True
-                        break
-
         if has_http_data:
             http_data.append(port_http_data)
 
@@ -582,7 +574,7 @@ def _parse_generic_scripts(host) -> Optional[List[Dict]]:
     handled_scripts = {
         'nbstat', 'smb-os-discovery', 'smb-protocols', 'smb-security-mode',
         'dns-service-discovery', 'http-title', 'http-server-header',
-        'http-methods', 'http-robots-txt', 'http-favicon', 'ssl-cert',
+        'http-methods', 'http-robots-txt', 'ssl-cert',
         'ssl-enum-ciphers', 'ssh-hostkey', 'ssh2-enum-algos', 'vulners'
     }
 
