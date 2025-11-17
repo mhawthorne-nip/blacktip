@@ -599,7 +599,19 @@ class BlacktipDatabase:
             
         Returns:
             Tuple of (device_id, was_new_ip, was_new_mac)
+        
+        Raises:
+            ValueError: If IP address or MAC address is invalid or reserved
         """
+        # Validate against reserved/invalid IP addresses
+        reserved_ips = ["0.0.0.0", "255.255.255.255"]
+        if ip_address in reserved_ips:
+            raise ValueError("Cannot record reserved IP address: {}".format(ip_address))
+        
+        # Validate IP address is not empty
+        if not ip_address or not mac_address:
+            raise ValueError("IP address and MAC address cannot be empty")
+        
         ts = timestamp()
         
         with self._get_connection() as conn:

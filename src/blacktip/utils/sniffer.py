@@ -161,6 +161,12 @@ class BlacktipSniffer:
         if not hw_address or not ip_address:
             logger.warning("Invalid packet: hw={} ip={}".format(hw_address, ip_address))
             return None
+        
+        # Double-check for reserved IPs (defense in depth)
+        reserved_ips = ["0.0.0.0", "255.255.255.255"]
+        if ip_address in reserved_ips:
+            logger.debug("Rejecting packet with reserved IP: {}".format(ip_address))
+            return None
 
         # Lookup hardware vendor
         hw_vendor = self.get_hw_vendor(hw_address)

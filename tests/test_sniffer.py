@@ -3,6 +3,7 @@
 import pytest
 from blacktip.utils.sniffer import BlacktipSniffer
 from blacktip.exceptions import BlacktipException
+from unittest.mock import Mock
 
 
 class TestScubAddress:
@@ -117,3 +118,69 @@ class TestGetHwVendor:
 
         assert vendor1 == vendor2, "Cached vendor should match"
         assert mac in self.sniffer._vendor_cache, "MAC should be in cache"
+
+class TestProcessPacket:
+    """Test packet processing with reserved IP address rejection"""
+
+    def setup_method(self):
+        """Create sniffer instance for each test"""
+        self.sniffer = BlacktipSniffer()
+        self.mock_db = Mock()
+
+    def test_reject_packet_with_reserved_ip_0_0_0_0(self):
+        """Test that packets with 0.0.0.0 are rejected"""
+        packet = {
+            "src": {
+                "ip": "0.0.0.0",
+                "hw": "aa:bb:cc:dd:ee:ff"
+            },
+            "dst": {
+                "ip": "192.168.1.1",
+                "hw": "00:11:22:33:44:55"
+            },
+            "op": "request"
+        }
+        
+        result = self.sniffer.process_packet(packet, self.mock_db)
+        assert result is None, "Packet with 0.0.0.0 should be rejected"
+        self.mock_db.upsert_device.assert_not_called()
+
+    def test_reject_packet_with_broadcast_ip(self):
+        """Test that packets with 255.255.255.255 are rejected"""
+        packet = {
+            "src": {
+                "ip": "255.255.255.255",
+                "hw": "aa:bb:cc:dd:ee:ff"
+            },
+            "dst": {
+                "ip": "192.168.1.1",
+                "hw": "00:11:22:33:44:55"
+            },
+            "op": "request"
+        }
+        
+        result = self.sniffer.process_packet(packet, self.mock_db)
+        assert result is None, "Packet with 255.255.255.255 should be rejected"
+        self.mock_db.upsert_device.assert_not_called()
+
+    def test_accept_valid_packet(self):
+        """Test that packets with valid IPs are processed"""
+        packet = {
+            "src": {
+                "ip": "192.168.1.100",
+                "hw": "aa:bb:cc:dd:ee:ff"
+            },
+            "dst": {
+                "ip": "192.168.1.1",
+                "hw": "00:11:22:33:44:55"
+            },
+            "op": "request"
+        }
+        
+        # Mock the database responses
+        self.mock_db.check_ip_conflict.return_value = None
+        self.mock_db.upsert_device.return_value = (1, True, True)
+        
+        result = self.sniffer.process_packet(packet, self.mock_db)
+        assert result is not None, "Valid packet should be processed"
+        self.mock_db.upsert_device.assert_called_once()
