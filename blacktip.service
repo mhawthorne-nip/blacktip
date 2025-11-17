@@ -1,45 +1,88 @@
 [Unit]
-Description=Blacktip Network Security Scanner
+Description=Blacktip Network Security Scanner with State Monitor and Web Frontend
 Documentation=https://github.com/mhawthorne-nip/blacktip
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
 Group=root
 
 # Working directory
 WorkingDirectory=/opt/blacktip
 
-# Main service command - adjust parameters as needed
-ExecStart=/usr/local/bin/blacktip \
-    --datafile /var/lib/blacktip/blacktip.db \
-    --interval 300 \
-    --nmap \
-    --metrics \
-    --metrics-interval 300
+# Create required directories and set permissions
+ExecStartPre=/bin/mkdir -p /var/lib/blacktip /var/log/blacktip /var/run/blacktip
+ExecStartPre=/bin/chown -R root:root /var/lib/blacktip /var/log/blacktip /var/run/blacktip
+ExecStartPre=/bin/chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blacktip
 
-# Environment variables for file logging
+# Start all three services
+ExecStart=/bin/bash -c '\
+    # Start main blacktip scanner \
+    /usr/local/bin/blacktip \
+        --datafile /var/lib/blacktip/blacktip.db \
+        --interval 300 \
+        --nmap \
+        --metrics \
+        --metrics-interval 300 \
+        >> /var/log/blacktip/blacktip.log 2>&1 & \
+    echo $! > /var/run/blacktip/blacktip.pid; \
+    \
+    # Wait a few seconds for database to be created \
+    sleep 5; \
+    \
+    # Start state monitor (requires root for active probing) \
+    /usr/local/bin/blacktip-state-monitor \
+        --datafile /var/lib/blacktip/blacktip.db \
+        --interval 60 \
+        --offline-threshold 300 \
+        --enable-probing \
+        >> /var/log/blacktip/state-monitor.log 2>&1 & \
+    echo $! > /var/run/blacktip/state-monitor.pid; \
+    \
+    # Start web frontend (make database readable) \
+    chmod 644 /var/lib/blacktip/blacktip.db 2>/dev/null || true; \
+    cd /opt/blacktip/web-frontend && \
+    BLACKTIP_DB=/var/lib/blacktip/blacktip.db PORT=5000 \
+    /usr/bin/python3 app.py \
+        >> /var/log/blacktip/web-frontend.log 2>&1 & \
+    echo $! > /var/run/blacktip/web-frontend.pid; \
+'
+
+# Stop all three services
+ExecStop=/bin/bash -c '\
+    for pidfile in /var/run/blacktip/*.pid; do \
+        [ -f "$pidfile" ] && kill $(cat "$pidfile") 2>/dev/null || true; \
+    done; \
+    rm -f /var/run/blacktip/*.pid; \
+'
+
+# Environment variables
 Environment="BLACKTIP_LOG_FILE=/var/log/blacktip/blacktip.log"
 Environment="BLACKTIP_LOG_LEVEL=info"
+Environment="BLACKTIP_DB=/var/lib/blacktip/blacktip.db"
+Environment="PORT=5000"
 
 # Restart policy
 Restart=on-failure
 RestartSec=10s
 
-# Security hardening (optional but recommended)
-NoNewPrivileges=true
+# Security hardening (adjusted for multi-process setup)
+# Note: NoNewPrivileges disabled because we need root for network operations
 PrivateTmp=true
 
 # Logging
-StandardOutput=append:/var/log/blacktip/blacktip.log
-StandardError=append:/var/log/blacktip/blacktip.log
+StandardOutput=append:/var/log/blacktip/service.log
+StandardError=append:/var/log/blacktip/service.log
 SyslogIdentifier=blacktip
 
 # Process limits
 LimitNOFILE=65536
 TimeoutStopSec=30s
+
+# PID file for the service itself (systemd will track children)
+PIDFile=/var/run/blacktip/blacktip.pid
 
 [Install]
 WantedBy=multi-user.target

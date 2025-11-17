@@ -12,6 +12,10 @@ from datetime import datetime, timezone
 try:
     from scapy.all import ARP, Ether, ICMP, IP, sr1, srp
     SCAPY_AVAILABLE = True
+    
+    # Suppress Scapy warnings about missing MAC addresses
+    import logging as scapy_logging
+    scapy_logging.getLogger("scapy.runtime").setLevel(scapy_logging.ERROR)
 except ImportError:
     SCAPY_AVAILABLE = False
 
