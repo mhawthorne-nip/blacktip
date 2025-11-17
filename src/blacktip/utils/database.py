@@ -1142,6 +1142,42 @@ class BlacktipDatabase:
 
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_devices_needing_rescan(self, days_threshold: int = 7) -> List[Dict]:
+        """Get devices that need nmap rescanning (data older than threshold or no scan)
+
+        Args:
+            days_threshold: Number of days after which a scan is considered stale (default: 7)
+
+        Returns:
+            List of device dictionaries (ip_address, mac_address, last_scan_date)
+        """
+        _logger.debug("Finding devices with nmap data older than {} days".format(days_threshold))
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Find devices that either:
+            # 1. Have never been scanned with nmap
+            # 2. Have nmap scans older than the threshold
+            cursor.execute("""
+                SELECT DISTINCT
+                    d.ip_address,
+                    d.mac_address,
+                    d.vendor,
+                    d.last_seen,
+                    MAX(n.scan_start) as last_scan_date
+                FROM devices d
+                LEFT JOIN nmap_scans n ON d.ip_address = n.ip_address
+                GROUP BY d.ip_address, d.mac_address
+                HAVING last_scan_date IS NULL
+                    OR datetime(last_scan_date) < datetime('now', '-{} days')
+                ORDER BY last_scan_date ASC NULLS FIRST
+            """.format(days_threshold))
+
+            devices = [dict(row) for row in cursor.fetchall()]
+            _logger.debug("Found {} device(s) needing rescan".format(len(devices)))
+            return devices
+
     def cleanup_old_data(self, days_to_keep: int = 90) -> Dict[str, int]:
         """Remove old data from database based on retention policy
 

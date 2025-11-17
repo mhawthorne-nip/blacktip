@@ -3,6 +3,8 @@ import time
 from blacktip import __title__ as NAME
 from blacktip import __version__ as VERSION
 from blacktip import __save_data_interval__default__ as SAVE_DATA_INTERVAL_DEFAULT
+from blacktip import __nmap_refresh_interval__ as NMAP_REFRESH_INTERVAL
+from blacktip import __nmap_refresh_threshold_days__ as NMAP_REFRESH_THRESHOLD_DAYS
 from blacktip.utils.utils import out
 from blacktip.utils.utils import timestamp
 from blacktip.utils import logger
@@ -54,11 +56,14 @@ class Blacktip:
         session_save_time = time.time()
         last_stats = db.get_statistics()
         session_data_count = last_stats["unique_ip_addresses"] + last_stats["unique_mac_addresses"]
-        
+
         # Metrics tracking
         metrics = get_metrics() if enable_metrics else None
         last_metrics_log = time.time()
-        
+
+        # Nmap refresh tracking
+        last_nmap_refresh_check = time.time()
+
         # Create a single sniffer instance for caching
         arp_sniffer = BlacktipSniffer()
 
@@ -189,6 +194,57 @@ class Blacktip:
                     if metrics:
                         metrics.increment("database_update_errors")
             
+            # Check for devices needing nmap refresh
+            if exe and (time.time() - last_nmap_refresh_check) > NMAP_REFRESH_INTERVAL:
+                try:
+                    devices_to_rescan = db.get_devices_needing_rescan(NMAP_REFRESH_THRESHOLD_DAYS)
+
+                    if devices_to_rescan:
+                        logger.info("Found {} device(s) with stale nmap data, triggering rescans".format(
+                            len(devices_to_rescan)))
+
+                        # Create executor for refresh scans
+                        refresh_exec = BlacktipExec(db=db)
+
+                        # Trigger nmap scans for each device
+                        for device in devices_to_rescan:
+                            packet_data = {
+                                "ip": {"addr": device['ip_address']},
+                                "hw": {"addr": device['mac_address']}
+                            }
+
+                            logger.debug("Scheduling refresh scan for {} (last scan: {})".format(
+                                device['ip_address'],
+                                device['last_scan_date'] or 'never'))
+
+                            refresh_exec.async_command_exec_thread(exe, packet_data, as_user=exec_user)
+
+                            if metrics:
+                                metrics.increment("nmap_refresh_scans_triggered")
+
+                        # Wait for refresh scans to complete
+                        if len(refresh_exec.subprocess_list) > 0:
+                            logger.debug("Waiting for {} refresh scan(s) to complete".format(
+                                len(refresh_exec.subprocess_list)))
+                            refresh_exec.async_command_exec_threads_wait()
+
+                        del refresh_exec
+
+                        if metrics:
+                            metrics.increment("nmap_refresh_checks_with_scans")
+                    else:
+                        logger.debug("No devices need nmap refresh")
+                        if metrics:
+                            metrics.increment("nmap_refresh_checks_no_scans")
+
+                    last_nmap_refresh_check = time.time()
+
+                except Exception as e:
+                    logger.error("Failed to check/refresh stale nmap data: {}".format(e))
+                    if metrics:
+                        metrics.increment("nmap_refresh_errors")
+                    last_nmap_refresh_check = time.time()  # Don't retry immediately
+
             # Log metrics periodically
             if metrics and enable_metrics and (time.time() - last_metrics_log) > metrics_interval:
                 metrics.log_stats()

@@ -50,3 +50,7 @@ __nmap__exec__ = "nmap -n -T4 -Pn -sV -O --script http-title,http-server-header,
 
 # Command execution configuration
 __exec_max_runtime__ = 120  # Increased for comprehensive enumeration with extensive NSE scripts
+
+# Nmap refresh configuration
+__nmap_refresh_interval__ = 3600  # Check for stale devices every hour (in seconds)
+__nmap_refresh_threshold_days__ = 7  # Rescan devices with nmap data older than 7 days
