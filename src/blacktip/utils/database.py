@@ -496,6 +496,7 @@ class BlacktipDatabase:
         # Add new columns to devices table if they don't exist
         new_device_columns = [
             ("hostname", "TEXT"),
+            ("device_name", "TEXT"),  # User-defined friendly name for the device
             ("device_type", "TEXT"),  # router, server, workstation, mobile, iot
             ("os_family", "TEXT"),  # Windows, Linux, iOS, Android
             ("is_gateway", "INTEGER DEFAULT 0"),
@@ -1502,3 +1503,27 @@ class BlacktipDatabase:
 
         _logger.debug("Updated classification for {} as {}".format(
             ip_address, classification.get('device_type')))
+
+    def update_device_name(self, ip_address: str, mac_address: str, device_name: str):
+        """Update the user-defined name for a device
+
+        Args:
+            ip_address: IP address of the device
+            mac_address: MAC address of the device
+            device_name: User-defined friendly name
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Update the device name for the specific IP/MAC combination
+            cursor.execute("""
+                UPDATE devices
+                SET device_name = ?
+                WHERE ip_address = ? AND mac_address = ?
+            """, (device_name if device_name else None, ip_address, mac_address))
+
+            if cursor.rowcount == 0:
+                _logger.warning("No device found for IP {} and MAC {}".format(ip_address, mac_address))
+                raise ValueError("Device not found")
+
+        _logger.debug("Updated device name for {} ({}) to '{}'".format(ip_address, mac_address, device_name))

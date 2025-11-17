@@ -471,8 +471,10 @@ class BlacktipWebAPI:
         Returns:
             Display name string
         """
-        # Priority: hostname > device_type > IP address
-        if device.get('ptr_hostname'):
+        # Priority: device_name > hostname > device_type > IP address
+        if device.get('device_name'):
+            return device['device_name']
+        elif device.get('ptr_hostname'):
             return device['ptr_hostname'].replace('.local', '').replace('.lan', '').title()
         elif device.get('hostname'):
             return device['hostname'].replace('.local', '').replace('.lan', '').title()
@@ -480,6 +482,28 @@ class BlacktipWebAPI:
             return '{} ({})'.format(device['device_type'].title(), device['ip_address'])
         else:
             return device['ip_address']
+
+    def update_device_name(self, ip_address: str, mac_address: str, device_name: str) -> bool:
+        """Update the user-defined name for a device
+
+        Args:
+            ip_address: IP address of the device
+            mac_address: MAC address of the device
+            device_name: User-defined friendly name
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # Import the database module here to use the update method
+        from blacktip.utils.database import BlacktipDatabase
+
+        try:
+            db = BlacktipDatabase(self.db_path)
+            db.update_device_name(ip_address, mac_address, device_name)
+            return True
+        except Exception as e:
+            print("Error updating device name: {}".format(e))
+            return False
 
     def _format_duration(self, seconds: float) -> str:
         """Format duration in seconds to human-readable string
@@ -621,6 +645,51 @@ def health_check():
         'status': 'healthy',
         'database': api.db_path
     })
+
+
+@app.route('/api/devices/<ip_address>/name', methods=['PUT'])
+def update_device_name(ip_address):
+    """Update device name
+
+    Args:
+        ip_address: IP address of the device
+
+    Request body:
+        {
+            "mac_address": "aa:bb:cc:dd:ee:ff",
+            "device_name": "My Device"
+        }
+
+    Returns:
+        JSON response with success status
+    """
+    if not api:
+        return jsonify({'error': 'Database not available'}), 500
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body must be JSON'}), 400
+
+        mac_address = data.get('mac_address')
+        device_name = data.get('device_name')
+
+        if not mac_address:
+            return jsonify({'error': 'mac_address is required'}), 400
+
+        # device_name can be empty string to clear the name
+        if device_name is None:
+            return jsonify({'error': 'device_name is required'}), 400
+
+        success = api.update_device_name(ip_address, mac_address, device_name)
+
+        if success:
+            return jsonify({'success': True, 'message': 'Device name updated'})
+        else:
+            return jsonify({'error': 'Failed to update device name'}), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
