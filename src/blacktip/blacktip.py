@@ -9,7 +9,7 @@ from blacktip import __speedtest_scheduler_enabled__ as SPEEDTEST_SCHEDULER_ENAB
 from blacktip import __speedtest_interval_hours__ as SPEEDTEST_INTERVAL_HOURS
 from blacktip.utils.utils import out
 from blacktip.utils.utils import timestamp
-from blacktip import logger
+from blacktip.utils import logger
 from blacktip.utils.database import BlacktipDatabase
 from blacktip.utils.sniffer import BlacktipSniffer
 from blacktip.utils.exe import BlacktipExec
