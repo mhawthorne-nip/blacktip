@@ -998,13 +998,100 @@ class BlacktipApp {
                         <div class="metric-unit">ms</div>
                     </div>
                 </div>
+
+                <div class="speedtest-metrics-secondary">
+                    <div class="metric-small jitter">
+                        <div class="metric-small-label">Jitter</div>
+                        <div class="metric-small-value">${test.jitter_ms ? test.jitter_ms.toFixed(2) + ' ms' : 'N/A'}</div>
+                    </div>
+                    <div class="metric-small packet-loss">
+                        <div class="metric-small-label">Packet Loss</div>
+                        <div class="metric-small-value">${test.packet_loss_percent !== null && test.packet_loss_percent !== undefined ? test.packet_loss_percent.toFixed(1) + '%' : 'N/A'}</div>
+                    </div>
+                </div>
             `;
 
+            // Latency details (if available)
+            if (test.download_latency_iqm || test.upload_latency_iqm) {
+                html += `
+                    <div class="speedtest-latency-details">
+                        <div class="latency-section">
+                            <div class="latency-title">📥 Download Latency</div>
+                            <div class="latency-metrics">
+                                ${test.download_latency_iqm ? `<span><strong>IQM:</strong> ${test.download_latency_iqm.toFixed(1)} ms</span>` : ''}
+                                ${test.download_latency_low ? `<span><strong>Low:</strong> ${test.download_latency_low.toFixed(1)} ms</span>` : ''}
+                                ${test.download_latency_high ? `<span><strong>High:</strong> ${test.download_latency_high.toFixed(1)} ms</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="latency-section">
+                            <div class="latency-title">📤 Upload Latency</div>
+                            <div class="latency-metrics">
+                                ${test.upload_latency_iqm ? `<span><strong>IQM:</strong> ${test.upload_latency_iqm.toFixed(1)} ms</span>` : ''}
+                                ${test.upload_latency_low ? `<span><strong>Low:</strong> ${test.upload_latency_low.toFixed(1)} ms</span>` : ''}
+                                ${test.upload_latency_high ? `<span><strong>High:</strong> ${test.upload_latency_high.toFixed(1)} ms</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Server and connection info
+            html += '<div class="speedtest-info-grid">';
+            
             if (test.server_name) {
                 html += `
-                    <div class="speedtest-server">
-                        <span class="server-label">Server:</span>
-                        <span class="server-value">${this.escapeHtml(test.server_name)}, ${this.escapeHtml(test.server_location || '')}</span>
+                    <div class="info-row">
+                        <span class="info-row-label">Server:</span>
+                        <span class="info-row-value">${this.escapeHtml(test.server_name)}</span>
+                    </div>
+                `;
+            }
+            
+            if (test.server_location) {
+                html += `
+                    <div class="info-row">
+                        <span class="info-row-label">Location:</span>
+                        <span class="info-row-value">${this.escapeHtml(test.server_location)}${test.server_country ? ', ' + this.escapeHtml(test.server_country) : ''}</span>
+                    </div>
+                `;
+            }
+            
+            if (test.isp_name) {
+                html += `
+                    <div class="info-row">
+                        <span class="info-row-label">ISP:</span>
+                        <span class="info-row-value">${this.escapeHtml(test.isp_name)}</span>
+                    </div>
+                `;
+            }
+            
+            if (test.public_ip) {
+                html += `
+                    <div class="info-row">
+                        <span class="info-row-label">Public IP:</span>
+                        <span class="info-row-value mono">${this.escapeHtml(test.public_ip)}</span>
+                    </div>
+                `;
+            }
+            
+            if (test.test_duration_seconds) {
+                html += `
+                    <div class="info-row">
+                        <span class="info-row-label">Duration:</span>
+                        <span class="info-row-value">${test.test_duration_seconds.toFixed(1)}s</span>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            
+            // Result URL link
+            if (test.result_url) {
+                html += `
+                    <div class="speedtest-result-link">
+                        <a href="${this.escapeHtml(test.result_url)}" target="_blank" rel="noopener noreferrer">
+                            🔗 View Detailed Results on Speedtest.net
+                        </a>
                     </div>
                 `;
             }
