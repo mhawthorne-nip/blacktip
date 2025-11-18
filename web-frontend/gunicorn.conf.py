@@ -22,8 +22,8 @@ max_requests = 1000
 max_requests_jitter = 50
 
 # Logging
-accesslog = os.environ.get('GUNICORN_ACCESS_LOG', '/var/log/blacktip/gunicorn-access.log')
-errorlog = os.environ.get('GUNICORN_ERROR_LOG', '/var/log/blacktip/gunicorn-error.log')
+accesslog = '-'  # Log to stdout
+errorlog = '-'   # Log to stderr
 loglevel = os.environ.get('GUNICORN_LOG_LEVEL', 'info')
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
