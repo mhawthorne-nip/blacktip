@@ -760,20 +760,48 @@ sudo systemctl status nginx
 
 When updating the application:
 
+**Option 1: Automated Deployment (Recommended)**
+
+Use the automated deployment script that updates both the scanner and web frontend:
+
+```bash
+# Make the script executable (one time only)
+sudo chmod +x /opt/blacktip/deploy.sh
+
+# Run the complete deployment
+sudo /opt/blacktip/deploy.sh
+```
+
+The script will automatically:
+- Create backups of database and configuration
+- Pull latest code from repository
+- Update dependencies for both scanner and web frontend
+- Restart both services
+- Verify deployment was successful
+- Show recent logs from both services
+
+**Option 2: Manual Deployment**
+
 ```bash
 cd /opt/blacktip
 
 # Pull latest changes
 git pull origin main
 
+# Update main dependencies if changed
+sudo pip3 install -r requirements.txt
+sudo pip3 install -e .
+
 # Update web frontend dependencies if needed
 cd web-frontend
 sudo pip3 install -r requirements.txt
 
-# Restart web service
+# Restart both services
+sudo systemctl restart blacktip.service
 sudo systemctl restart blacktip-web.service
 
-# Verify service restarted successfully
+# Verify services restarted successfully
+sudo systemctl status blacktip.service
 sudo systemctl status blacktip-web.service
 ```
 
