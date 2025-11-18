@@ -42,6 +42,35 @@ check_root() {
     fi
 }
 
+fix_permissions_quick() {
+    # Fix critical permissions needed for services to run
+    
+    # Log directory and files
+    mkdir -p /var/log/blacktip
+    touch /var/log/blacktip/gunicorn-access.log
+    touch /var/log/blacktip/gunicorn-error.log
+    chown -R blacktip:blacktip /var/log/blacktip
+    chmod 755 /var/log/blacktip
+    chmod 644 /var/log/blacktip/*.log 2>/dev/null || true
+    
+    # .env file
+    if [ -f "${WEB_DIR}/.env" ]; then
+        chown blacktip:blacktip "${WEB_DIR}/.env"
+        chmod 640 "${WEB_DIR}/.env"
+    fi
+    
+    # Database
+    if [ -f "${DB_PATH}" ]; then
+        chown root:blacktip "${DB_PATH}"
+        chmod 664 "${DB_PATH}"
+    fi
+    
+    # Runtime directory
+    mkdir -p /run/blacktip
+    chown blacktip:blacktip /run/blacktip
+    chmod 755 /run/blacktip
+}
+
 create_backup() {
     print_status "Creating backup..."
     
@@ -110,6 +139,10 @@ update_code() {
     fi
     
     print_status "Code updated successfully"
+    
+    # Fix critical permissions after update
+    print_status "Fixing permissions after code update..."
+    fix_permissions_quick
 }
 
 update_dependencies() {
