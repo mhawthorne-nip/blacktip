@@ -157,10 +157,6 @@ update_code() {
     fi
     
     print_status "Code updated successfully"
-    
-    # Fix critical permissions after update
-    print_status "Fixing permissions after code update..."
-    fix_permissions_quick
 }
 
 update_dependencies() {
@@ -199,32 +195,41 @@ update_dependencies() {
 restart_services() {
     print_status "Restarting services..."
     
+    # Stop services first before fixing permissions
+    print_status "Stopping services..."
+    systemctl stop blacktip-web.service || true
+    systemctl stop blacktip.service || true
+    
+    # Fix permissions while services are stopped
+    print_status "Fixing permissions..."
+    fix_permissions_quick
+    
     # Restart main scanner service
-    print_status "Restarting blacktip scanner service..."
-    systemctl restart blacktip.service
+    print_status "Starting blacktip scanner service..."
+    systemctl start blacktip.service
     
     # Wait for service to stabilize
     sleep 3
     
     # Check if scanner service is running
     if systemctl is-active --quiet blacktip.service; then
-        print_status "✓ Scanner service restarted successfully"
+        print_status "✓ Scanner service started successfully"
     else
         print_error "✗ Scanner service failed to start"
         journalctl -u blacktip.service -n 20 --no-pager
         exit 1
     fi
     
-    # Restart web service
-    print_status "Restarting web frontend service..."
-    systemctl restart blacktip-web.service
+    # Start web service
+    print_status "Starting web frontend service..."
+    systemctl start blacktip-web.service
     
     # Wait for service to start
     sleep 2
     
     # Check if web service is running
     if systemctl is-active --quiet blacktip-web.service; then
-        print_status "✓ Web service restarted successfully"
+        print_status "✓ Web service started successfully"
     else
         print_error "✗ Web service failed to start"
         journalctl -u blacktip-web.service -n 20 --no-pager
