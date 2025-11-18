@@ -32,7 +32,8 @@ proc_name = 'blacktip-web'
 
 # Server mechanics
 daemon = False
-pidfile = '/run/blacktip/gunicorn.pid'
+# Don't use pidfile - let systemd handle process tracking
+# pidfile = None  # or omit entirely
 user = None  # Set by systemd service
 group = None  # Set by systemd service
 umask = 0o007
