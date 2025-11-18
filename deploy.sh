@@ -45,13 +45,22 @@ check_root() {
 fix_permissions_quick() {
     # Fix critical permissions needed for services to run
     
-    # Log directory and files
+    # Log directory and files - force recreate with correct ownership
     mkdir -p /var/log/blacktip
+    
+    # Remove old log files if they exist with wrong permissions
+    rm -f /var/log/blacktip/gunicorn-access.log
+    rm -f /var/log/blacktip/gunicorn-error.log
+    
+    # Create new log files owned by blacktip
     touch /var/log/blacktip/gunicorn-access.log
     touch /var/log/blacktip/gunicorn-error.log
+    
+    # Set ownership
     chown -R blacktip:blacktip /var/log/blacktip
     chmod 755 /var/log/blacktip
-    chmod 644 /var/log/blacktip/*.log 2>/dev/null || true
+    chmod 644 /var/log/blacktip/gunicorn-access.log
+    chmod 644 /var/log/blacktip/gunicorn-error.log
     
     # .env file
     if [ -f "${WEB_DIR}/.env" ]; then
