@@ -115,7 +115,8 @@ class SpeedTestService:
             # Update database record
             if self.database and test_id:
                 self.database.update_speed_test(test_id, results)
-                Collect comprehensive network info with reverse DNS and geolocation
+                
+                # Collect comprehensive network info with reverse DNS and geolocation
                 network_info = self._network_collector.collect_network_info(
                     public_ip=client_info.get('ip'),
                     isp_name=client_info.get('isp')
@@ -123,8 +124,7 @@ class SpeedTestService:
                 
                 # Update network info in database
                 if network_info:
-                    self.database.upsert_network_info(network_info   'longitude': client_info.get('lon')
-                })
+                    self.database.upsert_network_info(network_info)
                 
                 # Check thresholds and create anomalies if needed
                 violations = self.database.check_speed_test_thresholds(results)
