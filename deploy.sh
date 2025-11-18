@@ -100,9 +100,14 @@ update_code() {
     
     cd "${APP_DIR}"
     
+    # Configure git to handle permissions properly
+    git config --local core.fileMode false
+    git config --local safe.directory "${APP_DIR}"
+    
     # Ensure git directory has correct permissions
     chown -R root:root .git
-    chmod -R 755 .git
+    chmod -R 775 .git
+    chmod -R g+w .git
     
     # Stash any local changes to avoid conflicts
     git stash --quiet || true
@@ -124,6 +129,10 @@ update_code() {
     
     # Fix ownership after pull
     chown -R root:root "${APP_DIR}"
+    
+    # Make .git writable to avoid permission errors
+    chmod -R 775 .git
+    chmod -R g+w .git
     
     # Make scripts executable
     chmod +x "${APP_DIR}"/*.sh 2>/dev/null || true

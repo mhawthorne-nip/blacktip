@@ -44,8 +44,12 @@ chown -R root:root /opt/blacktip
 
 # Fix git directory permissions to allow git operations
 print_status "Fixing git directory permissions..."
+cd /opt/blacktip
+git config --local core.fileMode false
+git config --local safe.directory /opt/blacktip
 chown -R root:root /opt/blacktip/.git
-chmod -R 755 /opt/blacktip/.git
+chmod -R 775 /opt/blacktip/.git
+chmod -R g+w /opt/blacktip/.git
 
 chmod -R 755 /opt/blacktip
 
