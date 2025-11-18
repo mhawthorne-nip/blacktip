@@ -390,28 +390,51 @@ class BlacktipWebAPI:
 
         state_events = [dict(row) for row in cursor.fetchall()]
 
-        for event in state_events:
+        # Process state events and calculate durations
+        for i, event in enumerate(state_events):
             device_name = self._get_device_display_name(event)
             device_type = event.get('classified_type') or event.get('vendor') or 'Unknown Device'
-            
-            # Calculate duration since this event
-            event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
-            if event_time.tzinfo is None:
-                event_time = event_time.replace(tzinfo=timezone.utc)
             
             # Get current state
             current_status = self._calculate_online_status(event.get('last_seen'))
             current_state = 'online' if current_status['is_online'] else 'offline'
             
-            # Calculate duration
-            time_since_event = now - event_time
-            duration_seconds = time_since_event.total_seconds()
-            duration_str = self._format_duration(duration_seconds)
+            # Find the previous event for this device to calculate duration in previous state
+            duration_str = None
+            previous_event = None
+            
+            # Look for the next event in the list (which is earlier in time) for the same device
+            for j in range(i + 1, len(state_events)):
+                if (state_events[j]['ip_address'] == event['ip_address'] and 
+                    state_events[j]['mac_address'] == event['mac_address']):
+                    previous_event = state_events[j]
+                    break
+            
+            if previous_event:
+                # Calculate duration between the previous event and this event
+                event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+                prev_event_time = datetime.fromisoformat(previous_event['timestamp'].replace('Z', '+00:00'))
+                
+                if event_time.tzinfo is None:
+                    event_time = event_time.replace(tzinfo=timezone.utc)
+                if prev_event_time.tzinfo is None:
+                    prev_event_time = prev_event_time.replace(tzinfo=timezone.utc)
+                
+                duration = event_time - prev_event_time
+                duration_str = self._format_duration(duration.total_seconds())
+            else:
+                # No previous event found, calculate time since this event to now
+                event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+                if event_time.tzinfo is None:
+                    event_time = event_time.replace(tzinfo=timezone.utc)
+                
+                time_since = now - event_time
+                duration_str = self._format_duration(time_since.total_seconds())
+            
+            # Check if device is still in the state it transitioned to
+            is_still_in_state = (event['new_state'] == current_state)
             
             if event['new_state'] == 'online':
-                # Check if device is still online
-                is_still_online = current_state == 'online'
-                
                 events.append({
                     'timestamp': event['timestamp'],
                     'event_type': 'online',
@@ -422,13 +445,11 @@ class BlacktipWebAPI:
                     'title': '{} went online'.format(device_name),
                     'description': 'The device {} came online.'.format(device_type),
                     'duration_str': duration_str,
-                    'is_current_state': is_still_online,
-                    'current_state': current_state
+                    'is_current_state': is_still_in_state,
+                    'current_state': current_state,
+                    'previous_state': event.get('previous_state', 'offline')
                 })
             else:  # offline
-                # Check if device is still offline
-                is_still_offline = current_state == 'offline'
-                
                 events.append({
                     'timestamp': event['timestamp'],
                     'event_type': 'offline',
@@ -439,8 +460,9 @@ class BlacktipWebAPI:
                     'title': '{} went offline'.format(device_name),
                     'description': 'The device {} went offline.'.format(device_type),
                     'duration_str': duration_str,
-                    'is_current_state': is_still_offline,
-                    'current_state': current_state
+                    'is_current_state': is_still_in_state,
+                    'current_state': current_state,
+                    'previous_state': event.get('previous_state', 'online')
                 })
 
         # Get device discovery events (first seen) - only get recent ones

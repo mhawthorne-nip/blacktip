@@ -795,17 +795,23 @@ class BlacktipApp {
             
             // Add duration information for online/offline events
             if ((event.event_type === 'online' || event.event_type === 'offline') && event.duration_str) {
-                const stateText = event.event_type === 'online' ? 'online' : 'offline';
+                const eventState = event.event_type; // The state the device transitioned TO
+                const previousState = event.previous_state || (eventState === 'online' ? 'offline' : 'online');
                 const isCurrentState = event.is_current_state;
                 
                 if (isCurrentState) {
+                    // Device is still in the state it transitioned to
+                    const stateText = eventState === 'online' ? 'online' : 'offline';
                     durationInfo = `<div class="timeline-duration">
                         <strong>${this.escapeHtml(event.device_name)}</strong> has been ${stateText} for <strong>${this.escapeHtml(event.duration_str)}</strong>
                     </div>`;
                 } else {
-                    const newState = event.current_state === 'online' ? 'online' : 'offline';
+                    // Device has changed state since this event
+                    // Show: "was [previous state] for [duration] (now [current state])"
+                    const previousStateText = previousState === 'online' ? 'online' : 'offline';
+                    const nowState = event.current_state === 'online' ? 'online' : 'offline';
                     durationInfo = `<div class="timeline-duration">
-                        <strong>${this.escapeHtml(event.device_name)}</strong> was ${stateText} for <strong>${this.escapeHtml(event.duration_str)}</strong> (now ${newState})
+                        <strong>${this.escapeHtml(event.device_name)}</strong> was ${previousStateText} for <strong>${this.escapeHtml(event.duration_str)}</strong> (now ${nowState})
                     </div>`;
                 }
             }
