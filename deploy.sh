@@ -118,11 +118,10 @@ update_code() {
     
     if [ "$LOCAL" = "$REMOTE" ]; then
         print_status "Already up to date"
-        return 0
+    else
+        print_status "New changes detected, pulling..."
+        git pull origin main
     fi
-    
-    print_status "New changes detected, pulling..."
-    git pull origin main
     
     # Fix ownership after pull
     chown -R root:root "${APP_DIR}"
@@ -134,6 +133,17 @@ update_code() {
     # Make scripts executable
     chmod +x "${APP_DIR}"/*.sh 2>/dev/null || true
     chmod +x "${WEB_DIR}"/*.sh 2>/dev/null || true
+    
+    # Install speedtest binary
+    if [ -f "${APP_DIR}/bin/speedtest" ]; then
+        print_status "Installing speedtest binary to /usr/local/bin..."
+        cp "${APP_DIR}/bin/speedtest" /usr/local/bin/speedtest
+        chmod +x /usr/local/bin/speedtest
+        chown root:root /usr/local/bin/speedtest
+        print_status "✓ Speedtest binary installed"
+    else
+        print_warning "Speedtest binary not found at ${APP_DIR}/bin/speedtest"
+    fi
     
     # Restore web frontend ownership
     chown -R blacktip:blacktip "${WEB_DIR}"

@@ -381,7 +381,7 @@ def blacktip():
         default=False,
         action="store_true",
         dest="enable_speedtest",
-        help="Enable automatic speed test scheduling (requires APScheduler and speedtest-cli).",
+        help="Enable automatic speed test scheduling (requires APScheduler and speedtest binary).",
     )
     parser_group5.add_argument(
         "--speedtest-interval",

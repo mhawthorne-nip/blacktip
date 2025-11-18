@@ -332,6 +332,12 @@ class BlacktipDatabase:
                     ping_ms REAL,
                     jitter_ms REAL,
                     packet_loss_percent REAL,
+                    download_latency_iqm REAL,
+                    download_latency_low REAL,
+                    download_latency_high REAL,
+                    upload_latency_iqm REAL,
+                    upload_latency_low REAL,
+                    upload_latency_high REAL,
                     isp_name TEXT,
                     public_ip TEXT,
                     server_name TEXT,
@@ -339,6 +345,7 @@ class BlacktipDatabase:
                     server_location TEXT,
                     server_country TEXT,
                     server_distance_km REAL,
+                    result_url TEXT,
                     test_status TEXT NOT NULL,
                     error_message TEXT,
                     test_duration_seconds REAL,
@@ -638,6 +645,29 @@ class BlacktipDatabase:
                 try:
                     cursor.execute("ALTER TABLE nmap_ports ADD COLUMN {} {}".format(column_name, column_type))
                     _logger.debug("Added column '{}' to nmap_ports table".format(column_name))
+                except Exception as e:
+                    _logger.debug("Could not add column '{}': {}".format(column_name, e))
+
+        # Get existing columns in speed_tests table
+        cursor.execute("PRAGMA table_info(speed_tests)")
+        existing_speedtest_columns = {row[1] for row in cursor.fetchall()}
+
+        # Add new columns to speed_tests table for enhanced speedtest binary output
+        new_speedtest_columns = [
+            ("download_latency_iqm", "REAL"),
+            ("download_latency_low", "REAL"),
+            ("download_latency_high", "REAL"),
+            ("upload_latency_iqm", "REAL"),
+            ("upload_latency_low", "REAL"),
+            ("upload_latency_high", "REAL"),
+            ("result_url", "TEXT"),
+        ]
+
+        for column_name, column_type in new_speedtest_columns:
+            if column_name not in existing_speedtest_columns:
+                try:
+                    cursor.execute("ALTER TABLE speed_tests ADD COLUMN {} {}".format(column_name, column_type))
+                    _logger.debug("Added column '{}' to speed_tests table".format(column_name))
                 except Exception as e:
                     _logger.debug("Could not add column '{}': {}".format(column_name, e))
 
@@ -1800,11 +1830,14 @@ class BlacktipDatabase:
             cursor.execute("""
                 INSERT INTO speed_tests
                 (test_start, test_end, download_mbps, upload_mbps,
-                 ping_ms, jitter_ms, packet_loss_percent, isp_name, public_ip,
+                 ping_ms, jitter_ms, packet_loss_percent,
+                 download_latency_iqm, download_latency_low, download_latency_high,
+                 upload_latency_iqm, upload_latency_low, upload_latency_high,
+                 isp_name, public_ip,
                  server_name, server_host, server_location, server_country,
-                 server_distance_km, test_status, error_message,
+                 server_distance_km, result_url, test_status, error_message,
                  test_duration_seconds, triggered_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 test_data.get('test_start'),
                 test_data.get('test_end'),
@@ -1813,6 +1846,12 @@ class BlacktipDatabase:
                 test_data.get('ping_ms'),
                 test_data.get('jitter_ms'),
                 test_data.get('packet_loss_percent'),
+                test_data.get('download_latency_iqm'),
+                test_data.get('download_latency_low'),
+                test_data.get('download_latency_high'),
+                test_data.get('upload_latency_iqm'),
+                test_data.get('upload_latency_low'),
+                test_data.get('upload_latency_high'),
                 test_data.get('isp_name'),
                 test_data.get('public_ip'),
                 test_data.get('server_name'),
@@ -1820,6 +1859,7 @@ class BlacktipDatabase:
                 test_data.get('server_location'),
                 test_data.get('server_country'),
                 test_data.get('server_distance_km'),
+                test_data.get('result_url'),
                 test_data.get('test_status'),
                 test_data.get('error_message'),
                 test_data.get('test_duration_seconds'),
@@ -1848,6 +1888,12 @@ class BlacktipDatabase:
                     ping_ms = ?,
                     jitter_ms = ?,
                     packet_loss_percent = ?,
+                    download_latency_iqm = ?,
+                    download_latency_low = ?,
+                    download_latency_high = ?,
+                    upload_latency_iqm = ?,
+                    upload_latency_low = ?,
+                    upload_latency_high = ?,
                     isp_name = ?,
                     public_ip = ?,
                     server_name = ?,
@@ -1855,6 +1901,7 @@ class BlacktipDatabase:
                     server_location = ?,
                     server_country = ?,
                     server_distance_km = ?,
+                    result_url = ?,
                     test_status = ?,
                     error_message = ?,
                     test_duration_seconds = ?
@@ -1866,6 +1913,12 @@ class BlacktipDatabase:
                 test_data.get('ping_ms'),
                 test_data.get('jitter_ms'),
                 test_data.get('packet_loss_percent'),
+                test_data.get('download_latency_iqm'),
+                test_data.get('download_latency_low'),
+                test_data.get('download_latency_high'),
+                test_data.get('upload_latency_iqm'),
+                test_data.get('upload_latency_low'),
+                test_data.get('upload_latency_high'),
                 test_data.get('isp_name'),
                 test_data.get('public_ip'),
                 test_data.get('server_name'),
@@ -1873,6 +1926,7 @@ class BlacktipDatabase:
                 test_data.get('server_location'),
                 test_data.get('server_country'),
                 test_data.get('server_distance_km'),
+                test_data.get('result_url'),
                 test_data.get('test_status'),
                 test_data.get('error_message'),
                 test_data.get('test_duration_seconds'),

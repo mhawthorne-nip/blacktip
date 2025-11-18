@@ -23,7 +23,7 @@ try:
     SPEEDTEST_AVAILABLE = True
 except ImportError:
     SPEEDTEST_AVAILABLE = False
-    logger.warning("APScheduler or speedtest-cli not installed. Speed test scheduling disabled.")
+    logger.warning("APScheduler or speedtest binary not available. Speed test scheduling disabled.")
 
 
 class Blacktip:
@@ -115,7 +115,7 @@ class Blacktip:
             logger.info("Initial speed test scheduled in 60 seconds")
             
         elif enable_speedtest and not SPEEDTEST_AVAILABLE:
-            logger.warning("Speed test requested but dependencies not available. Install APScheduler and speedtest-cli.")
+            logger.warning("Speed test requested but dependencies not available. Install APScheduler and speedtest binary.")
 
         # Create a single sniffer instance for caching
         arp_sniffer = BlacktipSniffer()

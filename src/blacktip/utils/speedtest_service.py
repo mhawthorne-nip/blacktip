@@ -1,12 +1,14 @@
 """
 Speedtest service for measuring internet connection performance.
 
-Uses speedtest-cli library to perform download/upload speed tests and latency measurements.
+Uses Ookla's speedtest binary to perform download/upload speed tests and latency measurements.
 """
 
 import logging
-import speedtest
+import subprocess
+import json
 import time
+import shutil
 from typing import Dict, Optional
 from datetime import datetime
 
@@ -14,6 +16,9 @@ from .utils import timestamp
 from .network_info import NetworkInfoCollector
 
 _logger = logging.getLogger(__name__)
+
+# Path to speedtest binary (installed via deploy.sh)
+SPEEDTEST_BINARY = "/usr/local/bin/speedtest"
 
 
 class SpeedTestService:
@@ -29,6 +34,13 @@ class SpeedTestService:
         self._last_test_time = None
         self._min_test_interval = 300  # Minimum 5 minutes between tests
         self._network_collector = NetworkInfoCollector()
+        
+        # Verify speedtest binary is available
+        if not shutil.which(SPEEDTEST_BINARY):
+            _logger.warning(
+                "Speedtest binary not found at {}. "
+                "Speed tests will fail until binary is installed.".format(SPEEDTEST_BINARY)
+            )
     
     def run_speed_test(self, triggered_by: str = 'manual') -> Dict:
         """Run a speed test and return results
@@ -54,40 +66,60 @@ class SpeedTestService:
                     'triggered_by': triggered_by
                 })
             
-            # Initialize speedtest
-            st = speedtest.Speedtest()
+            # Run speedtest binary with JSON output
+            _logger.debug("Running speedtest binary...")
+            result = subprocess.run(
+                [SPEEDTEST_BINARY, '-f', 'json', '--accept-license', '--accept-gdpr'],
+                capture_output=True,
+                text=True,
+                timeout=120  # 2 minute timeout
+            )
             
-            # Get server list and select best server
-            _logger.debug("Getting server list...")
-            st.get_servers()
-            st.get_best_server()
+            if result.returncode != 0:
+                raise Exception("Speedtest failed with exit code {}: {}".format(
+                    result.returncode, result.stderr))
             
-            server_info = st.best
+            # Parse JSON output
+            data = json.loads(result.stdout)
+            
+            # Extract server info
+            server = data.get('server', {})
             _logger.info("Selected server: {} ({}, {})".format(
-                server_info.get('sponsor', 'Unknown'),
-                server_info.get('name', 'Unknown'),
-                server_info.get('country', 'Unknown')
+                server.get('name', 'Unknown'),
+                server.get('location', 'Unknown'),
+                server.get('country', 'Unknown')
             ))
             
-            # Run download test
-            _logger.debug("Testing download speed...")
-            download_bps = st.download()
-            download_mbps = download_bps / 1_000_000
+            # Convert bandwidth from bytes/sec to Mbps
+            download_bps = data.get('download', {}).get('bandwidth', 0)
+            upload_bps = data.get('upload', {}).get('bandwidth', 0)
+            download_mbps = (download_bps * 8) / 1_000_000  # bytes/sec -> Mbps
+            upload_mbps = (upload_bps * 8) / 1_000_000
             
-            # Run upload test
-            _logger.debug("Testing upload speed...")
-            upload_bps = st.upload()
-            upload_mbps = upload_bps / 1_000_000
+            # Extract latency metrics
+            ping = data.get('ping', {})
+            ping_ms = ping.get('latency', 0)
+            jitter_ms = ping.get('jitter', 0)
             
-            # Get ping/latency
-            ping_ms = st.results.ping
+            # Extract packet loss (0 if not available)
+            packet_loss = data.get('packetLoss', 0)
+            
+            # Extract download/upload latency details
+            download_latency = data.get('download', {}).get('latency', {})
+            upload_latency = data.get('upload', {}).get('latency', {})
             
             # Calculate test duration
             test_end = timestamp()
             duration = time.time() - start_time
             
-            # Get client info
-            client_info = st.results.client
+            # Extract client/ISP info
+            isp = data.get('isp', 'Unknown')
+            interface = data.get('interface', {})
+            public_ip = interface.get('externalIp', '')
+            
+            # Extract result URL
+            result_data = data.get('result', {})
+            result_url = result_data.get('url', '')
             
             # Prepare result data
             results = {
@@ -99,13 +131,22 @@ class SpeedTestService:
                 'download_mbps': round(download_mbps, 2),
                 'upload_mbps': round(upload_mbps, 2),
                 'ping_ms': round(ping_ms, 2),
-                'server_name': server_info.get('sponsor'),
-                'server_host': server_info.get('host'),
-                'server_location': server_info.get('name'),
-                'server_country': server_info.get('country'),
-                'server_distance_km': round(server_info.get('d', 0), 2),
-                'isp_name': client_info.get('isp'),
-                'public_ip': client_info.get('ip'),
+                'jitter_ms': round(jitter_ms, 2),
+                'packet_loss_percent': packet_loss,
+                'download_latency_iqm': round(download_latency.get('iqm', 0), 2),
+                'download_latency_low': round(download_latency.get('low', 0), 2),
+                'download_latency_high': round(download_latency.get('high', 0), 2),
+                'upload_latency_iqm': round(upload_latency.get('iqm', 0), 2),
+                'upload_latency_low': round(upload_latency.get('low', 0), 2),
+                'upload_latency_high': round(upload_latency.get('high', 0), 2),
+                'server_name': server.get('name'),
+                'server_host': server.get('host'),
+                'server_location': server.get('location'),
+                'server_country': server.get('country'),
+                'server_distance_km': 0,  # Not provided in new format
+                'isp_name': isp,
+                'public_ip': public_ip,
+                'result_url': result_url,
                 'triggered_by': triggered_by
             }
             
@@ -118,8 +159,8 @@ class SpeedTestService:
                 
                 # Collect comprehensive network info with reverse DNS and geolocation
                 network_info = self._network_collector.collect_network_info(
-                    public_ip=client_info.get('ip'),
-                    isp_name=client_info.get('isp')
+                    public_ip=public_ip,
+                    isp_name=isp
                 )
                 
                 # Update network info in database
@@ -132,25 +173,25 @@ class SpeedTestService:
                     self.database.log_anomaly(
                         anomaly_type='speed_degradation',
                         message=violation['message'],
-                        ip_address=client_info.get('ip')
+                        ip_address=public_ip
                     )
                     _logger.warning("Threshold violation: {}".format(violation['message']))
             
             self._last_test_time = time.time()
             return results
             
-        except speedtest.ConfigRetrievalError as e:
-            error_msg = "Failed to retrieve speedtest configuration: {}".format(str(e))
+        except subprocess.TimeoutExpired:
+            error_msg = "Speedtest timed out after 120 seconds"
             _logger.error(error_msg)
             return self._handle_test_error(test_id, test_start, error_msg, triggered_by)
             
-        except speedtest.NoMatchedServers as e:
-            error_msg = "No speedtest servers matched criteria: {}".format(str(e))
+        except json.JSONDecodeError as e:
+            error_msg = "Failed to parse speedtest JSON output: {}".format(str(e))
             _logger.error(error_msg)
             return self._handle_test_error(test_id, test_start, error_msg, triggered_by)
             
-        except speedtest.SpeedtestException as e:
-            error_msg = "Speedtest error: {}".format(str(e))
+        except FileNotFoundError:
+            error_msg = "Speedtest binary not found at {}".format(SPEEDTEST_BINARY)
             _logger.error(error_msg)
             return self._handle_test_error(test_id, test_start, error_msg, triggered_by)
             
