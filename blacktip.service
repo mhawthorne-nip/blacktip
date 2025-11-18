@@ -1,5 +1,5 @@
 [Unit]
-Description=Blacktip Network Security Scanner with State Monitor and Web Frontend
+Description=Blacktip Network Security Scanner with State Monitor
 Documentation=https://github.com/mhawthorne-nip/blacktip
 After=network.target network-online.target
 Wants=network-online.target
@@ -17,7 +17,7 @@ ExecStartPre=/bin/mkdir -p /var/lib/blacktip /var/log/blacktip /var/run/blacktip
 ExecStartPre=/bin/chown -R root:root /var/lib/blacktip /var/log/blacktip /var/run/blacktip
 ExecStartPre=/bin/chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blacktip
 
-# Start all three services
+# Start scanner and state monitor
 ExecStart=/bin/bash -c '\
     # Start main blacktip scanner with speed tests \
     BLACKTIP_LOG_FILE=/var/log/blacktip/blacktip.log \
@@ -45,21 +45,17 @@ ExecStart=/bin/bash -c '\
         >> /var/log/blacktip/service.log 2>&1 & \
     echo $! > /var/run/blacktip/state-monitor.pid; \
     \
-    # Start web frontend (make database readable) \
-    chmod 644 /var/lib/blacktip/blacktip.db 2>/dev/null || true; \
-    cd /opt/blacktip/web-frontend && \
-    BLACKTIP_DB=/var/lib/blacktip/blacktip.db PORT=5000 \
-    /usr/bin/python3 app.py \
-        >> /var/log/blacktip/web-frontend.log 2>&1 & \
-    echo $! > /var/run/blacktip/web-frontend.pid; \
+    # Set database permissions for web frontend (read-write for device names) \
+    sleep 2; \
+    chown root:blacktip /var/lib/blacktip/blacktip.db 2>/dev/null || true; \
+    chmod 664 /var/lib/blacktip/blacktip.db 2>/dev/null || true; \
 '
 
-# Stop all three services
+# Stop scanner and state monitor
 ExecStop=/bin/bash -c '\
-    for pidfile in /var/run/blacktip/*.pid; do \
-        [ -f "$pidfile" ] && kill $(cat "$pidfile") 2>/dev/null || true; \
-    done; \
-    rm -f /var/run/blacktip/*.pid; \
+    [ -f /var/run/blacktip/blacktip.pid ] && kill $(cat /var/run/blacktip/blacktip.pid) 2>/dev/null || true; \
+    [ -f /var/run/blacktip/state-monitor.pid ] && kill $(cat /var/run/blacktip/state-monitor.pid) 2>/dev/null || true; \
+    rm -f /var/run/blacktip/blacktip.pid /var/run/blacktip/state-monitor.pid; \
 '
 
 # Environment variables

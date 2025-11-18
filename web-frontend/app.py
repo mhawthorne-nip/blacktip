@@ -11,20 +11,35 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+# Configure CORS for production - restrict to your domain
+allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'https://app.niceshark.com')
+CORS(app, origins=allowed_origins.split(','))
+
+# Secret key for session management
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 
 # Speed test service (initialized after database)
 speedtest_service = None
 
-# Disable caching for static files in development
+# Cache control - only disable caching for API endpoints
 @app.after_request
 def add_header(response):
-    """Add headers to prevent caching"""
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
+    """Add cache control headers - no cache for API, allow cache for static files"""
+    if request.path.startswith('/api/'):
+        # Disable caching for API responses
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    elif request.path.startswith('/static/'):
+        # Allow caching for static files (1 hour)
+        response.headers['Cache-Control'] = 'public, max-age=3600'
     return response
 
 # Configuration
@@ -1000,13 +1015,17 @@ def manage_thresholds():
 
 
 if __name__ == '__main__':
-    # Run development server
-    # Production: use gunicorn or similar
+    # Development server only - use Gunicorn for production
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
 
-    print("Starting Blacktip Web Frontend...")
+    print("Starting Blacktip Web Frontend (Development Mode)...")
     print("Database: {}".format(DEFAULT_DB_PATH))
-    print("Server: http://0.0.0.0:{}".format(port))
+    print("Server: http://127.0.0.1:{}".format(port))
+    print("")
+    print("WARNING: This is the development server.")
+    print("For production, use: gunicorn -c gunicorn.conf.py app:app")
+    print("")
 
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    # Bind to localhost only in development for security
+    app.run(host='127.0.0.1', port=port, debug=debug)
