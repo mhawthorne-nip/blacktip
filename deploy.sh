@@ -45,33 +45,21 @@ check_root() {
 fix_permissions_quick() {
     # Fix critical permissions needed for services to run
     
-    # Log directory and files - force recreate with correct ownership
-    mkdir -p /var/log/blacktip
+    # Database directory - SQLite needs write access to create journal/lock files
+    mkdir -p /var/lib/blacktip
+    chown root:blacktip /var/lib/blacktip
+    chmod 775 /var/lib/blacktip
     
-    # Remove old log files if they exist with wrong permissions
-    rm -f /var/log/blacktip/gunicorn-access.log
-    rm -f /var/log/blacktip/gunicorn-error.log
-    
-    # Create new log files owned by blacktip
-    touch /var/log/blacktip/gunicorn-access.log
-    touch /var/log/blacktip/gunicorn-error.log
-    
-    # Set ownership
-    chown -R blacktip:blacktip /var/log/blacktip
-    chmod 755 /var/log/blacktip
-    chmod 644 /var/log/blacktip/gunicorn-access.log
-    chmod 644 /var/log/blacktip/gunicorn-error.log
+    # Database file
+    if [ -f "${DB_PATH}" ]; then
+        chown root:blacktip "${DB_PATH}"
+        chmod 664 "${DB_PATH}"
+    fi
     
     # .env file
     if [ -f "${WEB_DIR}/.env" ]; then
         chown blacktip:blacktip "${WEB_DIR}/.env"
         chmod 640 "${WEB_DIR}/.env"
-    fi
-    
-    # Database
-    if [ -f "${DB_PATH}" ]; then
-        chown root:blacktip "${DB_PATH}"
-        chmod 664 "${DB_PATH}"
     fi
     
     # Runtime directory
