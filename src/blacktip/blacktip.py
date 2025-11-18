@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timedelta
 
 from blacktip import __title__ as NAME
 from blacktip import __version__ as VERSION
@@ -102,10 +103,11 @@ class Blacktip:
             scheduler.start()
             logger.info("Speed test scheduled to run every {} hour(s)".format(interval_hours))
             
-            # Run initial speed test after 60 seconds
+            initial_run = datetime.now() + timedelta(seconds=60)
             scheduler.add_job(
                 func=lambda: speedtest_service.run_speed_test(triggered_by='scheduled'),
                 trigger='date',
+                run_date=initial_run
                 run_date=time.time() + 60,
                 id='speedtest_initial',
                 name='Initial Speed Test'
