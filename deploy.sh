@@ -71,6 +71,13 @@ update_code() {
     
     cd "${APP_DIR}"
     
+    # Ensure git directory has correct permissions
+    chown -R root:root .git
+    chmod -R 755 .git
+    
+    # Stash any local changes to avoid conflicts
+    git stash --quiet || true
+    
     # Fetch latest changes
     git fetch origin
     
@@ -86,6 +93,22 @@ update_code() {
     print_status "New changes detected, pulling..."
     git pull origin main
     
+    # Fix ownership after pull
+    chown -R root:root "${APP_DIR}"
+    
+    # Make scripts executable
+    chmod +x "${APP_DIR}"/*.sh 2>/dev/null || true
+    chmod +x "${WEB_DIR}"/*.sh 2>/dev/null || true
+    
+    # Restore web frontend ownership
+    chown -R blacktip:blacktip "${WEB_DIR}"
+    
+    # Protect .env file if it exists
+    if [ -f "${WEB_DIR}/.env" ]; then
+        chown blacktip:blacktip "${WEB_DIR}/.env"
+        chmod 600 "${WEB_DIR}/.env"
+    fi
+    
     print_status "Code updated successfully"
 }
 
@@ -94,23 +117,29 @@ update_dependencies() {
     
     cd "${APP_DIR}"
     
+    # Determine pip flags (Ubuntu 24.04 needs --break-system-packages)
+    PIP_FLAGS=""
+    if pip3 install --help 2>&1 | grep -q "break-system-packages"; then
+        PIP_FLAGS="--break-system-packages"
+    fi
+    
     # Check if main requirements changed
-    if git diff HEAD@{1} HEAD -- requirements.txt | grep -q '^[+-]'; then
+    if git diff HEAD@{1} HEAD -- requirements.txt 2>/dev/null | grep -q '^[+-]'; then
         print_status "Main requirements changed, updating core packages..."
-        pip3 install -r requirements.txt --break-system-packages
+        pip3 install -r requirements.txt $PIP_FLAGS
         
         # Reinstall in editable mode
         print_status "Reinstalling blacktip package..."
-        pip3 install -e . --break-system-packages
+        pip3 install -e . $PIP_FLAGS
     else
         print_status "No core dependency changes detected"
     fi
     
     # Check web frontend requirements
     cd "${WEB_DIR}"
-    if git diff HEAD@{1} HEAD -- requirements.txt | grep -q '^[+-]'; then
+    if git diff HEAD@{1} HEAD -- requirements.txt 2>/dev/null | grep -q '^[+-]'; then
         print_status "Web frontend requirements changed, updating packages..."
-        pip3 install -r requirements.txt --break-system-packages
+        pip3 install -r requirements.txt $PIP_FLAGS
     else
         print_status "No web frontend dependency changes detected"
     fi

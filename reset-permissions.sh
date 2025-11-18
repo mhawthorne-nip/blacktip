@@ -41,6 +41,12 @@ print_section "Application Files"
 
 print_status "Setting ownership for application directory..."
 chown -R root:root /opt/blacktip
+
+# Fix git directory permissions to allow git operations
+print_status "Fixing git directory permissions..."
+chown -R root:root /opt/blacktip/.git
+chmod -R 755 /opt/blacktip/.git
+
 chmod -R 755 /opt/blacktip
 
 print_status "Setting web frontend ownership..."
