@@ -358,6 +358,26 @@ body {
     color: var(--primary-color);
 }
 
+/* Badge for speed test trigger type */
+.test-type-badge {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.test-type-badge.manual {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
+}
+
+.test-type-badge.scheduled {
+    background-color: rgba(37, 99, 235, 0.1);
+    color: var(--primary-color);
+}
+
 /* Modal */
 .modal {
     display: none;

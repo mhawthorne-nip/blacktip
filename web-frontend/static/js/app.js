@@ -1274,6 +1274,7 @@ class BlacktipApp {
                     <thead>
                         <tr>
                             <th>Date</th>
+                            <th>Type</th>
                             <th>Download</th>
                             <th>Upload</th>
                             <th>Ping</th>
@@ -1281,15 +1282,22 @@ class BlacktipApp {
                         </tr>
                     </thead>
                     <tbody>
-                        ${completedTests.map(test => `
+                        ${completedTests.map(test => {
+                            const triggerType = test.triggered_by || 'manual';
+                            const triggerLabel = triggerType === 'scheduled' ? 'Scheduled' : 'Manual';
+                            const triggerBadge = `<span class="test-type-badge ${triggerType}">${triggerLabel}</span>`;
+                            
+                            return `
                             <tr>
                                 <td>${this.formatTimestamp(test.test_start)}</td>
+                                <td>${triggerBadge}</td>
                                 <td class="metric-cell">${test.download_mbps.toFixed(1)} Mbps</td>
                                 <td class="metric-cell">${test.upload_mbps.toFixed(1)} Mbps</td>
                                 <td class="metric-cell">${test.ping_ms.toFixed(0)} ms</td>
                                 <td>${this.escapeHtml(test.server_location || '-')}</td>
                             </tr>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             `;

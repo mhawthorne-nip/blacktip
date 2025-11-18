@@ -520,7 +520,8 @@ class BlacktipWebAPI:
                 ping_ms,
                 server_location,
                 test_status,
-                error_message
+                error_message,
+                triggered_by
             FROM speed_tests
             WHERE test_status = 'completed'
             ORDER BY test_start DESC
@@ -529,12 +530,21 @@ class BlacktipWebAPI:
 
         for row in cursor.fetchall():
             test = dict(row)
+            # Determine title based on how the test was triggered
+            trigger_type = test.get('triggered_by', 'manual')
+            if trigger_type == 'scheduled':
+                title = 'Scheduled speed test completed'
+            elif trigger_type == 'manual':
+                title = 'Manual speed test completed'
+            else:
+                title = 'Speed test completed'
+            
             events.append({
                 'timestamp': test['timestamp'],
                 'event_type': 'speedtest',
                 'device_name': 'Internet Speed Test',
                 'device_type': 'speedtest',
-                'title': 'Scheduled speed test completed',
+                'title': title,
                 'description': 'Download speed is {:.1f} Mbps from {}. Upload speed is {:.1f} Mbps from {}. Latency is {:.0f} ms.'.format(
                     test['download_mbps'], 
                     test['server_location'] or 'Unknown',
@@ -545,7 +555,8 @@ class BlacktipWebAPI:
                 'download_mbps': test['download_mbps'],
                 'upload_mbps': test['upload_mbps'],
                 'ping_ms': test['ping_ms'],
-                'server_location': test['server_location']
+                'server_location': test['server_location'],
+                'triggered_by': trigger_type
             })
 
         # Sort events by timestamp (newest first)
@@ -819,6 +830,7 @@ def get_speed_tests():
         from blacktip.utils.database import BlacktipDatabase
         db = BlacktipDatabase(DEFAULT_DB_PATH)
         tests = db.get_speed_tests(limit=limit, days=days)
+        # Ensure triggered_by field is included in response
         return jsonify(tests)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
