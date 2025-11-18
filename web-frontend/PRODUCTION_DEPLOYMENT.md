@@ -556,6 +556,13 @@ sudo cp /opt/blacktip/web-frontend/blacktip-web.service \
 
 # Set permissions
 sudo chmod 644 /etc/systemd/system/blacktip-web.service
+
+# Install tmpfiles.d configuration for runtime directory
+sudo cp /opt/blacktip/web-frontend/blacktip-tmpfiles.conf \
+    /etc/tmpfiles.d/blacktip.conf
+
+# Create runtime directory with correct permissions
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/blacktip.conf
 ```
 
 ### 4. Reload Systemd
@@ -941,6 +948,23 @@ ls -lh /var/lib/blacktip/blacktip.db
 ```bash
 sudo chown -R blacktip:blacktip /var/log/blacktip
 sudo chmod 755 /var/log/blacktip
+```
+
+**Fix runtime directory permissions:**
+```bash
+# Ensure tmpfiles.d configuration is installed
+sudo cp /opt/blacktip/web-frontend/blacktip-tmpfiles.conf \
+    /etc/tmpfiles.d/blacktip.conf
+
+# Create/fix runtime directory
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/blacktip.conf
+
+# Verify
+ls -ld /run/blacktip
+# Should show: drwxr-xr-x blacktip blacktip
+
+# Restart service
+sudo systemctl restart blacktip-web.service
 ```
 
 ### Issue: CORS Errors in Browser Console

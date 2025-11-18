@@ -97,11 +97,11 @@ update_dependencies() {
     # Check if main requirements changed
     if git diff HEAD@{1} HEAD -- requirements.txt | grep -q '^[+-]'; then
         print_status "Main requirements changed, updating core packages..."
-        pip3 install -r requirements.txt
+        pip3 install -r requirements.txt --break-system-packages
         
         # Reinstall in editable mode
         print_status "Reinstalling blacktip package..."
-        pip3 install -e .
+        pip3 install -e . --break-system-packages
     else
         print_status "No core dependency changes detected"
     fi
@@ -110,7 +110,7 @@ update_dependencies() {
     cd "${WEB_DIR}"
     if git diff HEAD@{1} HEAD -- requirements.txt | grep -q '^[+-]'; then
         print_status "Web frontend requirements changed, updating packages..."
-        pip3 install -r requirements.txt
+        pip3 install -r requirements.txt --break-system-packages
     else
         print_status "No web frontend dependency changes detected"
     fi
