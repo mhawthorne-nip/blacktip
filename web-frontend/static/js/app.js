@@ -794,27 +794,16 @@ class BlacktipApp {
             let durationInfo = '';
             
             // Add duration information for online/offline events
-            if ((event.event_type === 'online' || event.event_type === 'offline') && event.duration_str && event.is_current_state) {
-                // Only show if device is still in the state it transitioned to
+            if ((event.event_type === 'online' || event.event_type === 'offline') && event.duration_str) {
+                // Show duration for all transition events
                 const eventState = event.event_type;
                 const previousState = event.previous_state || (eventState === 'online' ? 'offline' : 'online');
                 const previousStateText = previousState === 'online' ? 'online' : 'offline';
                 
-                // Format the timestamp
-                const eventDate = new Date(event.timestamp);
-                const formattedDate = eventDate.toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-                
-                // For "went online" -> "It has been offline since [date], for a duration of X"
-                // For "went offline" -> "It has been online since [date], for a duration of X"
+                // For "went online" -> "It was offline for a duration of X"
+                // For "went offline" -> "It was online for a duration of X"
                 durationInfo = `<div class="timeline-duration">
-                    It has been ${previousStateText} since ${formattedDate}, for a duration of <strong>${this.escapeHtml(event.duration_str)}</strong>.
+                    It was <strong>${previousStateText}</strong> for a duration of <strong>${this.escapeHtml(event.duration_str)}</strong>.
                 </div>`;
             }
 
