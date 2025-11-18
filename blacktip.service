@@ -14,8 +14,8 @@ WorkingDirectory=/opt/blacktip
 
 # Create required directories and set permissions
 ExecStartPre=/bin/mkdir -p /var/lib/blacktip /var/log/blacktip /run/blacktip
-ExecStartPre=/bin/chown -R root:root /var/lib/blacktip /var/log/blacktip /run/blacktip
-ExecStartPre=/bin/chmod 755 /var/lib/blacktip /var/log/blacktip /run/blacktip
+ExecStartPre=/bin/bash -c 'chown root:blacktip /var/lib/blacktip && chmod 775 /var/lib/blacktip'
+ExecStartPre=/bin/bash -c 'chown root:root /var/log/blacktip /run/blacktip && chmod 755 /var/log/blacktip /run/blacktip'
 
 # Start scanner and state monitor
 ExecStart=/bin/bash -c '\
