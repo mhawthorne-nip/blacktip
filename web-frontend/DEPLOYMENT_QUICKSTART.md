@@ -52,8 +52,8 @@ sudo pip3 install -e .
 
 ### 3. Create Directories
 ```bash
-sudo mkdir -p /var/lib/blacktip /var/log/blacktip /var/run/blacktip
-sudo chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blacktip
+sudo mkdir -p /var/lib/blacktip /var/log/blacktip /run/blacktip
+sudo chmod 755 /var/lib/blacktip /var/log/blacktip /run/blacktip
 ```
 
 ## System User Setup
@@ -62,7 +62,7 @@ sudo chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blacktip
 ```bash
 sudo groupadd --system blacktip
 sudo useradd --system --no-create-home --shell /bin/false --gid blacktip blacktip
-sudo chown -R blacktip:blacktip /var/log/blacktip /var/run/blacktip
+sudo chown -R blacktip:blacktip /var/log/blacktip /run/blacktip
 sudo chown root:blacktip /var/lib/blacktip
 ### 1. Install Python Dependencies
 ```bash

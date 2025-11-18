@@ -149,10 +149,10 @@ blacktip-state-monitor --help
 # Create directories for database and logs
 sudo mkdir -p /var/lib/blacktip
 sudo mkdir -p /var/log/blacktip
-sudo mkdir -p /var/run/blacktip
+sudo mkdir -p /run/blacktip
 
 # Set initial permissions (will be refined later)
-sudo chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blacktip
+sudo chmod 755 /var/lib/blacktip /var/log/blacktip /run/blacktip
 ```
 
 ---
@@ -176,7 +176,7 @@ id blacktip
 ```bash
 # Set ownership for log and run directories
 sudo chown -R blacktip:blacktip /var/log/blacktip
-sudo chown -R blacktip:blacktip /var/run/blacktip
+sudo chown -R blacktip:blacktip /run/blacktip
 
 # Database directory needs special permissions
 # Root owns it, but blacktip group can read/write

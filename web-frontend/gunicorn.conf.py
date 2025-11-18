@@ -32,7 +32,7 @@ proc_name = 'blacktip-web'
 
 # Server mechanics
 daemon = False
-pidfile = '/var/run/blacktip/gunicorn.pid'
+pidfile = '/run/blacktip/gunicorn.pid'
 user = None  # Set by systemd service
 group = None  # Set by systemd service
 umask = 0o007

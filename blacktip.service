@@ -13,9 +13,9 @@ Group=root
 WorkingDirectory=/opt/blacktip
 
 # Create required directories and set permissions
-ExecStartPre=/bin/mkdir -p /var/lib/blacktip /var/log/blacktip /var/run/blacktip
-ExecStartPre=/bin/chown -R root:root /var/lib/blacktip /var/log/blacktip /var/run/blacktip
-ExecStartPre=/bin/chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blacktip
+ExecStartPre=/bin/mkdir -p /var/lib/blacktip /var/log/blacktip /run/blacktip
+ExecStartPre=/bin/chown -R root:root /var/lib/blacktip /var/log/blacktip /run/blacktip
+ExecStartPre=/bin/chmod 755 /var/lib/blacktip /var/log/blacktip /run/blacktip
 
 # Start scanner and state monitor
 ExecStart=/bin/bash -c '\
@@ -30,7 +30,7 @@ ExecStart=/bin/bash -c '\
         --enable-speedtest \
         --speedtest-interval 2 \
         >> /var/log/blacktip/service.log 2>&1 & \
-    echo $! > /var/run/blacktip/blacktip.pid; \
+    echo $! > /run/blacktip/blacktip.pid; \
     \
     # Wait a few seconds for database to be created \
     sleep 5; \
@@ -43,7 +43,7 @@ ExecStart=/bin/bash -c '\
         --offline-threshold 300 \
         --enable-probing \
         >> /var/log/blacktip/service.log 2>&1 & \
-    echo $! > /var/run/blacktip/state-monitor.pid; \
+    echo $! > /run/blacktip/state-monitor.pid; \
     \
     # Set database permissions for web frontend (read-write for device names) \
     sleep 2; \
@@ -53,9 +53,9 @@ ExecStart=/bin/bash -c '\
 
 # Stop scanner and state monitor
 ExecStop=/bin/bash -c '\
-    [ -f /var/run/blacktip/blacktip.pid ] && kill $(cat /var/run/blacktip/blacktip.pid) 2>/dev/null || true; \
-    [ -f /var/run/blacktip/state-monitor.pid ] && kill $(cat /var/run/blacktip/state-monitor.pid) 2>/dev/null || true; \
-    rm -f /var/run/blacktip/blacktip.pid /var/run/blacktip/state-monitor.pid; \
+    [ -f /run/blacktip/blacktip.pid ] && kill $(cat /run/blacktip/blacktip.pid) 2>/dev/null || true; \
+    [ -f /run/blacktip/state-monitor.pid ] && kill $(cat /run/blacktip/state-monitor.pid) 2>/dev/null || true; \
+    rm -f /run/blacktip/blacktip.pid /run/blacktip/state-monitor.pid; \
 '
 
 # Environment variables
@@ -81,7 +81,7 @@ LimitNOFILE=65536
 TimeoutStopSec=30s
 
 # PID file for the service itself (systemd will track children)
-PIDFile=/var/run/blacktip/blacktip.pid
+PIDFile=/run/blacktip/blacktip.pid
 
 [Install]
 WantedBy=multi-user.target

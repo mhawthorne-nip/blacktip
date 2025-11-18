@@ -34,7 +34,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 # Read-write access to database for device_name updates
-ReadWritePaths=/var/log/blacktip /var/run/blacktip /var/lib/blacktip
+ReadWritePaths=/var/log/blacktip /run/blacktip /var/lib/blacktip
 
 # Resource limits
 LimitNOFILE=4096
