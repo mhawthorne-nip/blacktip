@@ -11,6 +11,7 @@ from typing import Dict, Optional
 from datetime import datetime
 
 from .utils import timestamp
+from .network_info import NetworkInfoCollector
 
 _logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class SpeedTestService:
         self.database = database
         self._last_test_time = None
         self._min_test_interval = 300  # Minimum 5 minutes between tests
+        self._network_collector = NetworkInfoCollector()
     
     def run_speed_test(self, triggered_by: str = 'manual') -> Dict:
         """Run a speed test and return results
@@ -113,18 +115,15 @@ class SpeedTestService:
             # Update database record
             if self.database and test_id:
                 self.database.update_speed_test(test_id, results)
+                Collect comprehensive network info with reverse DNS and geolocation
+                network_info = self._network_collector.collect_network_info(
+                    public_ip=client_info.get('ip'),
+                    isp_name=client_info.get('isp')
+                )
                 
-                # Update network info
-                self.database.upsert_network_info({
-                    'public_ip': client_info.get('ip'),
-                    'isp_name': client_info.get('isp'),
-                    'hostname': None,  # speedtest-cli doesn't provide hostname
-                    'city': None,
-                    'region': None,
-                    'country': client_info.get('country'),
-                    'timezone': None,
-                    'latitude': client_info.get('lat'),
-                    'longitude': client_info.get('lon')
+                # Update network info in database
+                if network_info:
+                    self.database.upsert_network_info(network_info   'longitude': client_info.get('lon')
                 })
                 
                 # Check thresholds and create anomalies if needed
