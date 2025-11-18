@@ -783,13 +783,73 @@ class BlacktipApp {
                 'discovered': '🆕',
                 'online': '🟢',
                 'offline': '⚫',
-                'anomaly': '⚠️'
+                'anomaly': '⚠️',
+                'speedtest': '🚀'
             };
 
             const icon = iconMap[event.event_type] || '•';
 
+            // Build the description based on event type
+            let description = event.description || '';
+            let durationInfo = '';
+            
+            // Add duration information for online/offline events
+            if ((event.event_type === 'online' || event.event_type === 'offline') && event.duration_str) {
+                const stateText = event.event_type === 'online' ? 'online' : 'offline';
+                const isCurrentState = event.is_current_state;
+                
+                if (isCurrentState) {
+                    durationInfo = `<div class="timeline-duration">
+                        <strong>${this.escapeHtml(event.device_name)}</strong> has been ${stateText} for <strong>${this.escapeHtml(event.duration_str)}</strong>
+                    </div>`;
+                } else {
+                    const newState = event.current_state === 'online' ? 'online' : 'offline';
+                    durationInfo = `<div class="timeline-duration">
+                        <strong>${this.escapeHtml(event.device_name)}</strong> was ${stateText} for <strong>${this.escapeHtml(event.duration_str)}</strong> (now ${newState})
+                    </div>`;
+                }
+            }
+
+            // Special rendering for speed test events
+            if (event.event_type === 'speedtest') {
+                return `
+                    <div class="timeline-event speedtest" data-ip="${this.escapeHtml(event.ip_address || '')}">
+                        <div class="timeline-event-header">
+                            <div class="timeline-event-title">
+                                <span class="timeline-event-icon ${event.event_type}">${icon}</span>
+                                <span>${this.escapeHtml(event.title)}</span>
+                            </div>
+                            <div class="timeline-event-time">
+                                <span class="timeline-event-timestamp">${this.formatTimestamp(event.timestamp)}</span>
+                                <span class="timeline-event-ago">${this.escapeHtml(event.time_ago)}</span>
+                            </div>
+                        </div>
+                        <div class="timeline-event-body">
+                            <div class="speedtest-metrics-inline">
+                                <div class="metric-inline download">
+                                    <span class="metric-label">Download:</span>
+                                    <span class="metric-value">${event.download_mbps.toFixed(1)} Mbps</span>
+                                </div>
+                                <div class="metric-inline upload">
+                                    <span class="metric-label">Upload:</span>
+                                    <span class="metric-value">${event.upload_mbps.toFixed(1)} Mbps</span>
+                                </div>
+                                <div class="metric-inline ping">
+                                    <span class="metric-label">Latency:</span>
+                                    <span class="metric-value">${event.ping_ms.toFixed(0)} ms</span>
+                                </div>
+                                <div class="metric-inline server">
+                                    <span class="metric-label">Server:</span>
+                                    <span class="metric-value">${this.escapeHtml(event.server_location || 'Unknown')}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             return `
-                <div class="timeline-event" data-ip="${this.escapeHtml(event.ip_address || '')}">
+                <div class="timeline-event ${event.event_type}" data-ip="${this.escapeHtml(event.ip_address || '')}">
                     <div class="timeline-event-header">
                         <div class="timeline-event-title">
                             <span class="timeline-event-icon ${event.event_type}">${icon}</span>
@@ -801,27 +861,30 @@ class BlacktipApp {
                         </div>
                     </div>
                     <div class="timeline-event-body">
-                        <div class="timeline-event-meta">
-                            ${event.ip_address ? `
-                                <div class="timeline-event-meta-item">
-                                    <span class="timeline-event-meta-label">IP:</span>
-                                    <span class="timeline-event-meta-value">${this.escapeHtml(event.ip_address)}</span>
-                                </div>
-                            ` : ''}
-                            ${event.mac_address ? `
-                                <div class="timeline-event-meta-item">
-                                    <span class="timeline-event-meta-label">MAC:</span>
-                                    <span class="timeline-event-meta-value">${this.escapeHtml(event.mac_address)}</span>
-                                </div>
-                            ` : ''}
-                        </div>
+                        ${durationInfo}
+                        ${event.ip_address || event.mac_address ? `
+                            <div class="timeline-event-meta">
+                                ${event.ip_address ? `
+                                    <div class="timeline-event-meta-item">
+                                        <span class="timeline-event-meta-label">IP:</span>
+                                        <span class="timeline-event-meta-value">${this.escapeHtml(event.ip_address)}</span>
+                                    </div>
+                                ` : ''}
+                                ${event.mac_address ? `
+                                    <div class="timeline-event-meta-item">
+                                        <span class="timeline-event-meta-label">MAC:</span>
+                                        <span class="timeline-event-meta-value">${this.escapeHtml(event.mac_address)}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
         }).join('');
 
-        // Add click handlers to timeline events
-        container.querySelectorAll('.timeline-event').forEach(eventEl => {
+        // Add click handlers to timeline events (except speedtest)
+        container.querySelectorAll('.timeline-event:not(.speedtest)').forEach(eventEl => {
             eventEl.addEventListener('click', () => {
                 const ip = eventEl.dataset.ip;
                 if (ip) {

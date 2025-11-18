@@ -377,6 +377,7 @@ class BlacktipWebAPI:
                 se.previous_state,
                 d.device_name,
                 d.vendor,
+                d.last_seen,
                 dc.device_type as classified_type,
                 dns.ptr_hostname
             FROM device_state_events se
@@ -393,7 +394,24 @@ class BlacktipWebAPI:
             device_name = self._get_device_display_name(event)
             device_type = event.get('classified_type') or event.get('vendor') or 'Unknown Device'
             
+            # Calculate duration since this event
+            event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+            if event_time.tzinfo is None:
+                event_time = event_time.replace(tzinfo=timezone.utc)
+            
+            # Get current state
+            current_status = self._calculate_online_status(event.get('last_seen'))
+            current_state = 'online' if current_status['is_online'] else 'offline'
+            
+            # Calculate duration
+            time_since_event = now - event_time
+            duration_seconds = time_since_event.total_seconds()
+            duration_str = self._format_duration(duration_seconds)
+            
             if event['new_state'] == 'online':
+                # Check if device is still online
+                is_still_online = current_state == 'online'
+                
                 events.append({
                     'timestamp': event['timestamp'],
                     'event_type': 'online',
@@ -402,9 +420,15 @@ class BlacktipWebAPI:
                     'ip_address': event['ip_address'],
                     'mac_address': event['mac_address'],
                     'title': '{} went online'.format(device_name),
-                    'description': 'The device {} came online.'.format(device_type)
+                    'description': 'The device {} came online.'.format(device_type),
+                    'duration_str': duration_str,
+                    'is_current_state': is_still_online,
+                    'current_state': current_state
                 })
             else:  # offline
+                # Check if device is still offline
+                is_still_offline = current_state == 'offline'
+                
                 events.append({
                     'timestamp': event['timestamp'],
                     'event_type': 'offline',
@@ -413,7 +437,10 @@ class BlacktipWebAPI:
                     'ip_address': event['ip_address'],
                     'mac_address': event['mac_address'],
                     'title': '{} went offline'.format(device_name),
-                    'description': 'The device {} went offline.'.format(device_type)
+                    'description': 'The device {} went offline.'.format(device_type),
+                    'duration_str': duration_str,
+                    'is_current_state': is_still_offline,
+                    'current_state': current_state
                 })
 
         # Get device discovery events (first seen) - only get recent ones
@@ -472,6 +499,44 @@ class BlacktipWebAPI:
                 'mac_address': anomaly.get('mac_address'),
                 'title': 'Security anomaly: {}'.format(anomaly['anomaly_type']),
                 'description': anomaly['message']
+            })
+
+        # Get speed test events
+        cursor.execute("""
+            SELECT 
+                id,
+                test_start as timestamp,
+                download_mbps,
+                upload_mbps,
+                ping_ms,
+                server_location,
+                test_status,
+                error_message
+            FROM speed_tests
+            WHERE test_status = 'completed'
+            ORDER BY test_start DESC
+            LIMIT ?
+        """, (limit,))
+
+        for row in cursor.fetchall():
+            test = dict(row)
+            events.append({
+                'timestamp': test['timestamp'],
+                'event_type': 'speedtest',
+                'device_name': 'Internet Speed Test',
+                'device_type': 'speedtest',
+                'title': 'Scheduled speed test completed',
+                'description': 'Download speed is {:.1f} Mbps from {}. Upload speed is {:.1f} Mbps from {}. Latency is {:.0f} ms.'.format(
+                    test['download_mbps'], 
+                    test['server_location'] or 'Unknown',
+                    test['upload_mbps'],
+                    test['server_location'] or 'Unknown',
+                    test['ping_ms']
+                ),
+                'download_mbps': test['download_mbps'],
+                'upload_mbps': test['upload_mbps'],
+                'ping_ms': test['ping_ms'],
+                'server_location': test['server_location']
             })
 
         # Sort events by timestamp (newest first)

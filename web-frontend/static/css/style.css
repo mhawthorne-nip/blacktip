@@ -596,6 +596,11 @@ body {
     color: var(--danger-color);
 }
 
+.timeline-event-icon.speedtest {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--warning-color);
+}
+
 .timeline-event-time {
     font-size: 0.75rem;
     color: var(--gray-500);
@@ -622,6 +627,30 @@ body {
     margin-bottom: 0.5rem;
 }
 
+.timeline-duration {
+    font-size: 0.9375rem;
+    color: var(--gray-700);
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--gray-100);
+    border-radius: 0.375rem;
+    border-left: 3px solid var(--primary-color);
+}
+
+.timeline-duration strong {
+    color: var(--gray-900);
+}
+
+.timeline-event.online .timeline-duration {
+    border-left-color: var(--success-color);
+    background-color: rgba(16, 185, 129, 0.05);
+}
+
+.timeline-event.offline .timeline-duration {
+    border-left-color: var(--gray-500);
+    background-color: rgba(107, 114, 128, 0.05);
+}
+
 .timeline-event-meta {
     display: flex;
     flex-wrap: wrap;
@@ -642,6 +671,60 @@ body {
 
 .timeline-event-meta-value {
     font-family: 'Courier New', monospace;
+}
+
+/* Speed Test Timeline Events */
+.timeline-event.speedtest {
+    cursor: default;
+}
+
+.timeline-event.speedtest:hover {
+    background-color: white;
+}
+
+.speedtest-metrics-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 0.75rem 0;
+}
+
+.metric-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.metric-inline .metric-label {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.metric-inline .metric-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--gray-900);
+}
+
+.metric-inline.download .metric-value {
+    color: var(--success-color);
+}
+
+.metric-inline.upload .metric-value {
+    color: var(--primary-color);
+}
+
+.metric-inline.ping .metric-value {
+    color: var(--warning-color);
+}
+
+.metric-inline.server .metric-value {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-700);
 }
 
 .loading-state {
