@@ -800,10 +800,21 @@ class BlacktipApp {
                 const previousState = event.previous_state || (eventState === 'online' ? 'offline' : 'online');
                 const previousStateText = previousState === 'online' ? 'online' : 'offline';
                 
-                // For "went online" -> "has been offline since X ago" (was offline before coming online)
-                // For "went offline" -> "has been online since X ago" (was online before going offline)
+                // Format the timestamp
+                const eventDate = new Date(event.timestamp);
+                const formattedDate = eventDate.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                
+                // For "went online" -> "It has been offline since [date], for a duration of X"
+                // For "went offline" -> "It has been online since [date], for a duration of X"
                 durationInfo = `<div class="timeline-duration">
-                    <strong>${this.escapeHtml(event.device_name)}</strong> has been ${previousStateText} since <strong>${this.escapeHtml(event.duration_str)}</strong> ago
+                    It has been ${previousStateText} since ${formattedDate}, for a duration of <strong>${this.escapeHtml(event.duration_str)}</strong>.
                 </div>`;
             }
 
