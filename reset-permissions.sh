@@ -84,6 +84,14 @@ mkdir -p /var/log/blacktip
 chown -R blacktip:blacktip /var/log/blacktip
 chmod 755 /var/log/blacktip
 
+# Create log files if they don't exist
+touch /var/log/blacktip/gunicorn-access.log
+touch /var/log/blacktip/gunicorn-error.log
+chown blacktip:blacktip /var/log/blacktip/gunicorn-access.log
+chown blacktip:blacktip /var/log/blacktip/gunicorn-error.log
+chmod 644 /var/log/blacktip/gunicorn-access.log
+chmod 644 /var/log/blacktip/gunicorn-error.log
+
 # Set permissions on existing log files
 if ls /var/log/blacktip/*.log >/dev/null 2>&1; then
     chown blacktip:blacktip /var/log/blacktip/*.log

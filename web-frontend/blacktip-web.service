@@ -5,7 +5,7 @@ After=network.target blacktip.service
 Wants=blacktip.service
 
 [Service]
-Type=notify
+Type=exec
 User=blacktip
 Group=blacktip
 WorkingDirectory=/opt/blacktip/web-frontend
