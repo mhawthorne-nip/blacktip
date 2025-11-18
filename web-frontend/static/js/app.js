@@ -794,26 +794,17 @@ class BlacktipApp {
             let durationInfo = '';
             
             // Add duration information for online/offline events
-            if ((event.event_type === 'online' || event.event_type === 'offline') && event.duration_str) {
-                const eventState = event.event_type; // The state the device transitioned TO
+            if ((event.event_type === 'online' || event.event_type === 'offline') && event.duration_str && event.is_current_state) {
+                // Only show if device is still in the state it transitioned to
+                const eventState = event.event_type;
                 const previousState = event.previous_state || (eventState === 'online' ? 'offline' : 'online');
-                const isCurrentState = event.is_current_state;
+                const previousStateText = previousState === 'online' ? 'online' : 'offline';
                 
-                if (isCurrentState) {
-                    // Device is still in the state it transitioned to
-                    const stateText = eventState === 'online' ? 'online' : 'offline';
-                    durationInfo = `<div class="timeline-duration">
-                        <strong>${this.escapeHtml(event.device_name)}</strong> has been ${stateText} for <strong>${this.escapeHtml(event.duration_str)}</strong>
-                    </div>`;
-                } else {
-                    // Device has changed state since this event
-                    // Show: "was [previous state] for [duration] (now [current state])"
-                    const previousStateText = previousState === 'online' ? 'online' : 'offline';
-                    const nowState = event.current_state === 'online' ? 'online' : 'offline';
-                    durationInfo = `<div class="timeline-duration">
-                        <strong>${this.escapeHtml(event.device_name)}</strong> was ${previousStateText} for <strong>${this.escapeHtml(event.duration_str)}</strong> (now ${nowState})
-                    </div>`;
-                }
+                // For "went online" -> "has been offline since X ago" (was offline before coming online)
+                // For "went offline" -> "has been online since X ago" (was online before going offline)
+                durationInfo = `<div class="timeline-duration">
+                    <strong>${this.escapeHtml(event.device_name)}</strong> has been ${previousStateText} since <strong>${this.escapeHtml(event.duration_str)}</strong> ago
+                </div>`;
             }
 
             // Special rendering for speed test events

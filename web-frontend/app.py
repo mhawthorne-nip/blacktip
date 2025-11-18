@@ -399,40 +399,27 @@ class BlacktipWebAPI:
             current_status = self._calculate_online_status(event.get('last_seen'))
             current_state = 'online' if current_status['is_online'] else 'offline'
             
-            # Find the previous event for this device to calculate duration in previous state
-            duration_str = None
-            previous_event = None
+            # Check if device is still in the state it transitioned to
+            is_still_in_state = (event['new_state'] == current_state)
             
-            # Look for the next event in the list (which is earlier in time) for the same device
+            # Calculate duration in PREVIOUS state (before this transition)
+            duration_str = None
+            event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+            if event_time.tzinfo is None:
+                event_time = event_time.replace(tzinfo=timezone.utc)
+            
+            # Find the previous transition event (later in list, earlier in time)
             for j in range(i + 1, len(state_events)):
                 if (state_events[j]['ip_address'] == event['ip_address'] and 
                     state_events[j]['mac_address'] == event['mac_address']):
-                    previous_event = state_events[j]
+                    prev_event_time = datetime.fromisoformat(state_events[j]['timestamp'].replace('Z', '+00:00'))
+                    if prev_event_time.tzinfo is None:
+                        prev_event_time = prev_event_time.replace(tzinfo=timezone.utc)
+                    
+                    # Duration in previous state = time from previous event to this event
+                    duration = event_time - prev_event_time
+                    duration_str = self._format_duration(duration.total_seconds())
                     break
-            
-            if previous_event:
-                # Calculate duration between the previous event and this event
-                event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
-                prev_event_time = datetime.fromisoformat(previous_event['timestamp'].replace('Z', '+00:00'))
-                
-                if event_time.tzinfo is None:
-                    event_time = event_time.replace(tzinfo=timezone.utc)
-                if prev_event_time.tzinfo is None:
-                    prev_event_time = prev_event_time.replace(tzinfo=timezone.utc)
-                
-                duration = event_time - prev_event_time
-                duration_str = self._format_duration(duration.total_seconds())
-            else:
-                # No previous event found, calculate time since this event to now
-                event_time = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
-                if event_time.tzinfo is None:
-                    event_time = event_time.replace(tzinfo=timezone.utc)
-                
-                time_since = now - event_time
-                duration_str = self._format_duration(time_since.total_seconds())
-            
-            # Check if device is still in the state it transitioned to
-            is_still_in_state = (event['new_state'] == current_state)
             
             if event['new_state'] == 'online':
                 events.append({
