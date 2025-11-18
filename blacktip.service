@@ -19,7 +19,7 @@ ExecStartPre=/bin/chmod 755 /var/lib/blacktip /var/log/blacktip /var/run/blackti
 
 # Start all three services
 ExecStart=/bin/bash -c '\
-    # Start main blacktip scanner \
+    # Start main blacktip scanner with speed tests \
     BLACKTIP_LOG_FILE=/var/log/blacktip/blacktip.log \
     /usr/local/bin/blacktip \
         --datafile /var/lib/blacktip/blacktip.db \
@@ -27,6 +27,8 @@ ExecStart=/bin/bash -c '\
         --nmap \
         --metrics \
         --metrics-interval 300 \
+        --enable-speedtest \
+        --speedtest-interval 2 \
         >> /var/log/blacktip/service.log 2>&1 & \
     echo $! > /var/run/blacktip/blacktip.pid; \
     \
