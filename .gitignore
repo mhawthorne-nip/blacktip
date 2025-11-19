@@ -18,6 +18,7 @@ lib/
 lib64/
 # But allow web-frontend client lib directory
 !web-frontend/client/src/lib/
+node_modules/
 parts/
 sdist/
 var/

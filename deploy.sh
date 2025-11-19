@@ -159,27 +159,27 @@ update_code() {
 
 update_dependencies() {
     print_status "Updating dependencies..."
-    
+
     cd "${APP_DIR}"
-    
+
     # Determine pip flags (Ubuntu 24.04 needs --break-system-packages)
     PIP_FLAGS=""
     if pip3 install --help 2>&1 | grep -q "break-system-packages"; then
         PIP_FLAGS="--break-system-packages"
     fi
-    
+
     # Check if main requirements changed
     if git diff HEAD@{1} HEAD -- requirements.txt 2>/dev/null | grep -q '^[+-]'; then
         print_status "Main requirements changed, updating core packages..."
         pip3 install -r requirements.txt $PIP_FLAGS
-        
+
         # Reinstall in editable mode
         print_status "Reinstalling blacktip package..."
         pip3 install -e . $PIP_FLAGS
     else
         print_status "No core dependency changes detected"
     fi
-    
+
     # Check web frontend requirements
     cd "${WEB_DIR}"
     if git diff HEAD@{1} HEAD -- requirements.txt 2>/dev/null | grep -q '^[+-]'; then
@@ -188,6 +188,54 @@ update_dependencies() {
     else
         print_status "No web frontend dependency changes detected"
     fi
+}
+
+build_frontend() {
+    print_status "Building React frontend..."
+
+    cd "${WEB_DIR}/client"
+
+    # Check if Node.js is installed
+    if ! command -v node &> /dev/null; then
+        print_error "Node.js is not installed. Please install Node.js 18+ first."
+        exit 1
+    fi
+
+    # Check Node.js version
+    NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
+    if [ "$NODE_VERSION" -lt 18 ]; then
+        print_warning "Node.js version $NODE_VERSION detected. Version 18+ is recommended."
+    fi
+
+    # Install npm dependencies if package.json changed or node_modules missing
+    if [ ! -d "node_modules" ] || git diff HEAD@{1} HEAD -- package.json 2>/dev/null | grep -q '^[+-]'; then
+        print_status "Installing npm dependencies..."
+        npm install
+    else
+        print_status "No package.json changes detected, skipping npm install"
+    fi
+
+    # Build the React app
+    print_status "Running production build..."
+    npm run build
+
+    # Verify build output exists
+    if [ -d "dist" ] && [ -f "dist/index.html" ]; then
+        print_status "✓ Frontend build completed successfully"
+
+        # Set correct permissions for the dist directory
+        chown -R blacktip:blacktip dist/
+        chmod -R 755 dist/
+
+        # Show build stats
+        BUILD_SIZE=$(du -sh dist/ | cut -f1)
+        print_status "  Build size: ${BUILD_SIZE}"
+    else
+        print_error "✗ Frontend build failed - dist/index.html not found"
+        exit 1
+    fi
+
+    cd "${APP_DIR}"
 }
 
 restart_services() {
@@ -237,7 +285,7 @@ restart_services() {
 
 verify_deployment() {
     print_status "Verifying deployment..."
-    
+
     # Check scanner service status
     if systemctl is-active --quiet blacktip.service; then
         print_status "✓ Scanner service is running"
@@ -245,7 +293,7 @@ verify_deployment() {
         print_error "✗ Scanner service is not running"
         return 1
     fi
-    
+
     # Check web service status
     if systemctl is-active --quiet blacktip-web.service; then
         print_status "✓ Web service is running"
@@ -253,14 +301,23 @@ verify_deployment() {
         print_error "✗ Web service is not running"
         return 1
     fi
-    
+
     # Check if Gunicorn is listening
     if ss -tlnp | grep -q ':5000'; then
         print_status "✓ Gunicorn is listening on port 5000"
     else
         print_warning "✗ Gunicorn is not listening on port 5000"
     fi
-    
+
+    # Verify React frontend build exists
+    if [ -f "${WEB_DIR}/client/dist/index.html" ]; then
+        print_status "✓ React frontend build exists"
+        FRONTEND_SIZE=$(du -sh "${WEB_DIR}/client/dist" | cut -f1 2>/dev/null || echo "unknown")
+        print_status "  Build size: ${FRONTEND_SIZE}"
+    else
+        print_warning "✗ React frontend build not found at ${WEB_DIR}/client/dist"
+    fi
+
     # Verify database exists and has correct permissions
     if [ -f "${DB_PATH}" ]; then
         print_status "✓ Database file exists"
@@ -270,7 +327,7 @@ verify_deployment() {
     else
         print_warning "✗ Database file not found (may still be initializing)"
     fi
-    
+
     # Test health endpoint
     if command -v curl &> /dev/null; then
         RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/api/health 2>/dev/null || echo "000")
@@ -306,10 +363,13 @@ main() {
     
     print_section "Code Update"
     update_code
-    
+
     print_section "Dependencies"
     update_dependencies
-    
+
+    print_section "Frontend Build"
+    build_frontend
+
     print_section "Service Restart"
     restart_services
     
