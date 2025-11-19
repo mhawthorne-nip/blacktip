@@ -123,7 +123,7 @@ export function SpeedTest() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-600">
-                {latestTest.download_speed.toFixed(2)}
+                {latestTest.download_speed?.toFixed(2) ?? '—'}
                 <span className="text-lg ml-1">Mbps</span>
               </div>
               {latestTest.download_latency_iqm && (
@@ -143,7 +143,7 @@ export function SpeedTest() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-600">
-                {latestTest.upload_speed.toFixed(2)}
+                {latestTest.upload_speed?.toFixed(2) ?? '—'}
                 <span className="text-lg ml-1">Mbps</span>
               </div>
               {latestTest.upload_latency_iqm && (
@@ -163,7 +163,7 @@ export function SpeedTest() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-yellow-600">
-                {latestTest.ping.toFixed(2)}
+                {latestTest.ping?.toFixed(2) ?? '—'}
                 <span className="text-lg ml-1">ms</span>
               </div>
               <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
@@ -245,19 +245,25 @@ export function SpeedTest() {
                 <div>
                   <span className="text-xs text-muted-foreground">Avg Download</span>
                   <p className="text-sm font-semibold">
-                    {statistics.avg_download.toFixed(2)} Mbps
+                    {statistics.avg_download !== null
+                      ? `${statistics.avg_download.toFixed(2)} Mbps`
+                      : '—'}
                   </p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Avg Upload</span>
                   <p className="text-sm font-semibold">
-                    {statistics.avg_upload.toFixed(2)} Mbps
+                    {statistics.avg_upload !== null
+                      ? `${statistics.avg_upload.toFixed(2)} Mbps`
+                      : '—'}
                   </p>
                 </div>
                 <div>
                   <span className="text-xs text-muted-foreground">Avg Ping</span>
                   <p className="text-sm font-semibold">
-                    {statistics.avg_ping.toFixed(2)} ms
+                    {statistics.avg_ping !== null
+                      ? `${statistics.avg_ping.toFixed(2)} ms`
+                      : '—'}
                   </p>
                 </div>
                 <div>
@@ -310,13 +316,13 @@ export function SpeedTest() {
                       </div>
                     </TableCell>
                     <TableCell className="font-semibold text-blue-600">
-                      {test.download_speed.toFixed(2)} Mbps
+                      {test.download_speed?.toFixed(2) ?? '—'} Mbps
                     </TableCell>
                     <TableCell className="font-semibold text-green-600">
-                      {test.upload_speed.toFixed(2)} Mbps
+                      {test.upload_speed?.toFixed(2) ?? '—'} Mbps
                     </TableCell>
                     <TableCell className="font-semibold text-yellow-600">
-                      {test.ping.toFixed(2)} ms
+                      {test.ping?.toFixed(2) ?? '—'} ms
                     </TableCell>
                     <TableCell className="text-sm">
                       {test.server_name && (

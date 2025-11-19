@@ -85,15 +85,15 @@ export interface SpeedTest {
 }
 
 export interface SpeedTestStatistics {
-  avg_download: number
-  avg_upload: number
-  avg_ping: number
-  min_download: number
-  max_download: number
-  min_upload: number
-  max_upload: number
-  min_ping: number
-  max_ping: number
+  avg_download: number | null
+  avg_upload: number | null
+  avg_ping: number | null
+  min_download: number | null
+  max_download: number | null
+  min_upload: number | null
+  max_upload: number | null
+  min_ping: number | null
+  max_ping: number | null
   test_count: number
 }
 
