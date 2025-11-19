@@ -16,10 +16,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__,
+            static_folder='client/dist/assets',
+            static_url_path='/assets')
 
 # Configure CORS for production - restrict to your domain
-allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'https://app.niceshark.com')
+# In development, allow localhost. In production, set ALLOWED_ORIGINS env var
+allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5173,https://app.niceshark.com')
 CORS(app, origins=allowed_origins.split(','))
 
 # Secret key for session management
@@ -677,9 +680,10 @@ except Exception as e:
 
 # Routes
 @app.route('/')
-def index():
-    """Render main page"""
-    return render_template('index.html')
+@app.route('/<path:path>')
+def index(path=''):
+    """Serve the React application"""
+    return app.send_static_file('../client/dist/index.html')
 
 
 @app.route('/api/devices')
