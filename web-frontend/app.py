@@ -9,7 +9,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -683,7 +683,10 @@ except Exception as e:
 @app.route('/<path:path>')
 def index(path=''):
     """Serve the React application"""
-    return app.send_static_file('../client/dist/index.html')
+    # Get the directory where this Flask app is located
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dist_dir = os.path.join(base_dir, 'client', 'dist')
+    return send_from_directory(dist_dir, 'index.html')
 
 
 @app.route('/api/devices')
